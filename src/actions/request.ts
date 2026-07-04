@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache"
 
 import { createCompanyNotification } from "@/actions/notifications"
 import { createClient } from "@/lib/supabase/server"
-import { isOtherOption } from "@/lib/constants/property-types"
+import { isNeighborhoodOther, isPropertyTypeOther } from "@/lib/constants/property-types"
+import { formatPropertyType } from "@/lib/property-utils"
 import {
   insertRequestSchema,
   type InsertRequestInput,
@@ -63,11 +64,12 @@ export async function addRequest(
     return { error: insertError.message }
   }
 
-  const requestType = isOtherOption(parsed.data.type)
-    ? parsed.data.custom_property_type?.trim() || parsed.data.type
-    : parsed.data.type
+  const requestType = isPropertyTypeOther(parsed.data.type)
+    ? parsed.data.custom_property_type?.trim() ||
+      formatPropertyType(parsed.data.type)
+    : formatPropertyType(parsed.data.type)
 
-  const neighborhood = isOtherOption(parsed.data.neighborhood)
+  const neighborhood = isNeighborhoodOther(parsed.data.neighborhood)
     ? parsed.data.custom_neighborhood?.trim() || parsed.data.city
     : parsed.data.neighborhood?.trim() || parsed.data.city
 

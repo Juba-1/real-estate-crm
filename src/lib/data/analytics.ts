@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import { normalizePropertyType } from "@/lib/constants/property-types"
 import { formatPropertyType, PROPERTY_TYPES } from "@/lib/property-utils"
 import type { PropertyStatus, PropertyType } from "@/types/property"
 
@@ -216,7 +217,8 @@ function buildTypeDistribution(
   }
 
   for (const property of properties) {
-    counts.set(property.type, (counts.get(property.type) ?? 0) + 1)
+    const normalizedType = normalizePropertyType(property.type) as PropertyType
+    counts.set(normalizedType, (counts.get(normalizedType) ?? 0) + 1)
   }
 
   return PROPERTY_TYPES.map((type) => ({

@@ -7,7 +7,8 @@ import {
 import {
   isBuildingType,
   isLandType,
-  isOtherOption,
+  isNeighborhoodOther,
+  isPropertyTypeOther,
   OTHER_OPTION,
   PROPERTY_TYPE_VALUES,
 } from "@/lib/constants/property-types"
@@ -102,7 +103,7 @@ export const insertPropertySchema = z
       return
     }
 
-    if (isOtherOption(data.type)) {
+    if (isPropertyTypeOther(data.type)) {
       const customType = data.custom_property_type?.trim()
       if (!customType || customType.length < 2) {
         context.addIssue({
@@ -113,7 +114,7 @@ export const insertPropertySchema = z
       }
     }
 
-    if (isOtherOption(data.neighborhood)) {
+    if (isNeighborhoodOther(data.neighborhood)) {
       const customNeighborhood = data.custom_neighborhood?.trim()
       if (!customNeighborhood || customNeighborhood.length < 2) {
         context.addIssue({

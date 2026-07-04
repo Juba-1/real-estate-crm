@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import { normalizePropertyType } from "@/lib/constants/property-types"
 import {
   offerTypeSchema,
   propertyStatusSchema,
@@ -83,7 +84,9 @@ function parseCompanySearchFilters(searchParams: CompanyPropertySearchParams) {
   const offerTypeParam = getSearchParam(searchParams.offer_type)
   const statusParam = getSearchParam(searchParams.status)
 
-  const type = propertyTypeSchema.safeParse(typeParam)
+  const type = propertyTypeSchema.safeParse(
+    typeParam ? normalizePropertyType(typeParam) : undefined
+  )
   const offer_type = offerTypeSchema.safeParse(offerTypeParam)
   const status = statusParam
     ? propertyStatusSchema.safeParse(statusParam)

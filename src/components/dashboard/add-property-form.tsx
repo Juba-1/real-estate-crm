@@ -62,7 +62,8 @@ import {
   getNeighborhoodsForCity,
 } from "@/lib/constants/locations"
 import {
-  isOtherOption,
+  isNeighborhoodOther,
+  isPropertyTypeOther,
   PROPERTY_TYPE_VALUES,
   shouldShowAge,
   shouldShowAnnexField,
@@ -86,7 +87,7 @@ import {
 const OFFER_TYPES: OfferType[] = ["sale", "rent"]
 
 const EMPTY_DEFAULT_VALUES: InsertPropertyFormValues = {
-  type: "شقة",
+  type: "apartment",
   custom_property_type: "",
   offer_type: "sale",
   city: "",
@@ -157,8 +158,8 @@ export function AddPropertyForm({
   const selectedCity = form.watch("city")
   const selectedType = form.watch("type")
   const selectedNeighborhood = form.watch("neighborhood")
-  const showCustomType = isOtherOption(selectedType)
-  const showCustomNeighborhood = isOtherOption(selectedNeighborhood)
+  const showCustomType = isPropertyTypeOther(selectedType)
+  const showCustomNeighborhood = isNeighborhoodOther(selectedNeighborhood)
   const neighborhoods = getNeighborhoodsForCity(selectedCity)
   const isBusy = form.formState.isSubmitting || isUploadingImages
 
@@ -497,7 +498,7 @@ export function AddPropertyForm({
                                 value={neighborhood}
                                 onSelect={() => {
                                   field.onChange(neighborhood)
-                                  if (!isOtherOption(neighborhood)) {
+                                  if (!isNeighborhoodOther(neighborhood)) {
                                     form.setValue("custom_neighborhood", "")
                                   }
                                   setNeighborhoodOpen(false)

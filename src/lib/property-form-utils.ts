@@ -1,3 +1,4 @@
+import { normalizePropertyType } from "@/lib/constants/property-types"
 import type { EditableProperty } from "@/lib/data/properties"
 import type { InsertPropertyFormValues, PropertyType } from "@/types/property"
 
@@ -7,7 +8,7 @@ export function editablePropertyToFormValues(
   const specs = property.specs ?? {}
 
   return {
-    type: property.type as PropertyType,
+    type: normalizePropertyType(property.type) as PropertyType,
     custom_property_type: property.custom_property_type ?? "",
     offer_type: property.offer_type,
     city: property.city,

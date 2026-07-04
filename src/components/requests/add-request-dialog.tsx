@@ -52,7 +52,11 @@ import {
   EASTERN_CITY_NAMES,
   getNeighborhoodsForCity,
 } from "@/lib/constants/locations"
-import { isOtherOption, PROPERTY_TYPE_VALUES } from "@/lib/constants/property-types"
+import {
+  isNeighborhoodOther,
+  isPropertyTypeOther,
+  PROPERTY_TYPE_VALUES,
+} from "@/lib/constants/property-types"
 import { cn } from "@/lib/utils"
 import {
   insertRequestSchema,
@@ -78,7 +82,7 @@ export function AddRequestDialog() {
       insertRequestSchema
     ) as Resolver<InsertRequestFormValues>,
     defaultValues: {
-      type: "فيلا",
+      type: "villa",
       custom_property_type: "",
       offer_type: "sale",
       city: "",
@@ -91,8 +95,8 @@ export function AddRequestDialog() {
   const selectedCity = form.watch("city")
   const selectedType = form.watch("type")
   const selectedNeighborhood = form.watch("neighborhood")
-  const showCustomType = isOtherOption(selectedType)
-  const showCustomNeighborhood = isOtherOption(selectedNeighborhood)
+  const showCustomType = isPropertyTypeOther(selectedType)
+  const showCustomNeighborhood = isNeighborhoodOther(selectedNeighborhood)
   const neighborhoods = getNeighborhoodsForCity(selectedCity)
 
   async function onSubmit(values: InsertRequestFormValues) {
@@ -288,7 +292,7 @@ export function AddRequestDialog() {
                                   value={neighborhood}
                                   onSelect={() => {
                                     field.onChange(neighborhood)
-                                    if (!isOtherOption(neighborhood)) {
+                                    if (!isNeighborhoodOther(neighborhood)) {
                                       form.setValue("custom_neighborhood", "")
                                     }
                                     setNeighborhoodOpen(false)

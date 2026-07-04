@@ -4,7 +4,7 @@ import {
   EASTERN_CITY_NAMES,
   getNeighborhoodsForCity,
 } from "@/lib/constants/locations"
-import { isOtherOption } from "@/lib/constants/property-types"
+import { isNeighborhoodOther, isPropertyTypeOther } from "@/lib/constants/property-types"
 import { offerTypeSchema, propertyTypeSchema } from "@/types/property"
 
 export const requestStatusSchema = z.enum(["active", "executed", "archived"])
@@ -40,7 +40,7 @@ export const insertRequestSchema = z
       }
     }
 
-    if (isOtherOption(data.type)) {
+    if (isPropertyTypeOther(data.type)) {
       const customType = data.custom_property_type?.trim()
       if (!customType || customType.length < 2) {
         context.addIssue({
@@ -51,7 +51,7 @@ export const insertRequestSchema = z
       }
     }
 
-    if (isOtherOption(data.neighborhood)) {
+    if (data.neighborhood && isNeighborhoodOther(data.neighborhood)) {
       const customNeighborhood = data.custom_neighborhood?.trim()
       if (!customNeighborhood || customNeighborhood.length < 2) {
         context.addIssue({

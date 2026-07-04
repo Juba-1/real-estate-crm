@@ -20,7 +20,7 @@ export function usePropertyLabels() {
 
   return {
     propertyType: (type: PropertyType, customType?: string | null) => {
-      if (type === "أخرى" && customType?.trim()) {
+      if (type === "other" && customType?.trim()) {
         return customType.trim()
       }
 
