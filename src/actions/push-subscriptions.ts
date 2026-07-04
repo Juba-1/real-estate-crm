@@ -8,7 +8,20 @@ import { createClient } from "@/lib/supabase/server"
 export type PushSubscriptionActionResult = { error: string } | null
 
 const pushSubscriptionSchema = z.object({
-  endpoint: z.string().url(),
+  endpoint: z
+    .string()
+    .min(1)
+    .refine(
+      (value) => {
+        try {
+          const url = new URL(value)
+          return url.protocol === "https:" || url.protocol === "http:"
+        } catch {
+          return false
+        }
+      },
+      { message: "Push endpoint must be a valid URL." }
+    ),
   expirationTime: z.number().nullable().optional(),
   keys: z.object({
     p256dh: z.string().min(1),

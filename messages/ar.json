@@ -40,6 +40,8 @@
     "denied": "تم رفض إذن الإشعارات من المتصفح",
     "unsupported": "المتصفح لا يدعم الإشعارات الفورية",
     "missingVapid": "مفاتيح VAPID غير مُعدّة على الخادم",
+    "serviceWorkerFailed": "تعذّر تحميل Service Worker — تأكد من أن sw.js متاح مباشرة على النطاق",
+    "invalidVapid": "مفتاح VAPID العام غير صالح — أعد توليد المفاتيح وتحقق من NEXT_PUBLIC_VAPID_PUBLIC_KEY",
     "failed": "تعذّر تحديث إعدادات الإشعارات"
   },
   "roles": {

@@ -236,6 +236,11 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    /*
+     * Exclude static assets and the push service worker.
+     * sw.js must bypass i18n middleware — otherwise next-intl redirects it
+     * to /ar/sw.js and the browser receives HTML instead of JavaScript.
+     */
+    "/((?!_next/static|_next/image|favicon.ico|sw\\.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 }

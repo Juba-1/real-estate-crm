@@ -11,6 +11,7 @@ import {
 } from "@/actions/push-subscriptions"
 import { Button } from "@/components/ui/button"
 import {
+  getPushClientErrorMessage,
   isPushSupported,
   registerPushServiceWorker,
   serializePushSubscription,
@@ -18,6 +19,31 @@ import {
 } from "@/lib/push/client"
 
 type PushState = "unsupported" | "idle" | "enabled" | "denied"
+
+function resolveClientError(
+  error: unknown,
+  t: ReturnType<typeof useTranslations<"pushNotifications">>
+): string {
+  const code = getPushClientErrorMessage(error)
+
+  if (code === "MISSING_VAPID") {
+    return t("missingVapid")
+  }
+
+  if (code === "SERVICE_WORKER") {
+    return t("serviceWorkerFailed")
+  }
+
+  if (code === "INVALID_VAPID") {
+    return t("invalidVapid")
+  }
+
+  if (code === "UNKNOWN") {
+    return t("failed")
+  }
+
+  return code
+}
 
 export function PushNotificationManager() {
   const t = useTranslations("pushNotifications")
@@ -35,22 +61,22 @@ export function PushNotificationManager() {
       return
     }
 
-    const registration = await registerPushServiceWorker()
-    if (!registration) {
-      setState("unsupported")
-      return
-    }
+    try {
+      const registration = await registerPushServiceWorker()
+      const existing = await registration.pushManager.getSubscription()
 
-    const existing = await registration.pushManager.getSubscription()
-    if (existing) {
-      const result = await savePushSubscription(
-        serializePushSubscription(existing)
-      )
+      if (existing) {
+        const result = await savePushSubscription(
+          serializePushSubscription(existing)
+        )
 
-      if (!result?.error) {
-        setState("enabled")
-        return
+        if (!result?.error) {
+          setState("enabled")
+          return
+        }
       }
+    } catch {
+      // Ignore background sync errors; the user can opt in manually.
     }
 
     setState("idle")
@@ -83,18 +109,7 @@ export function PushNotificationManager() {
       }
 
       const registration = await registerPushServiceWorker()
-      if (!registration) {
-        setState("unsupported")
-        toast.error(t("unsupported"))
-        return
-      }
-
       const subscription = await subscribeToPush(registration)
-      if (!subscription) {
-        setState("idle")
-        toast.error(t("missingVapid"))
-        return
-      }
 
       const result = await savePushSubscription(
         serializePushSubscription(subscription)
@@ -108,9 +123,9 @@ export function PushNotificationManager() {
 
       setState("enabled")
       toast.success(t("enabled"))
-    } catch {
+    } catch (error) {
       setState("idle")
-      toast.error(t("failed"))
+      toast.error(resolveClientError(error, t))
     } finally {
       setIsBusy(false)
     }
@@ -135,8 +150,8 @@ export function PushNotificationManager() {
 
       setState("idle")
       toast.success(t("disabled"))
-    } catch {
-      toast.error(t("failed"))
+    } catch (error) {
+      toast.error(resolveClientError(error, t))
     } finally {
       setIsBusy(false)
     }

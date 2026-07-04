@@ -40,6 +40,8 @@
     "denied": "Notification permission was denied in the browser",
     "unsupported": "This browser does not support push notifications",
     "missingVapid": "VAPID keys are not configured on the server",
+    "serviceWorkerFailed": "Could not load the service worker — sw.js must be served directly on your domain",
+    "invalidVapid": "The VAPID public key is invalid — regenerate keys and verify NEXT_PUBLIC_VAPID_PUBLIC_KEY",
     "failed": "Could not update push notification settings"
   },
   "roles": {
