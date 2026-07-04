@@ -1,10 +1,25 @@
--- Phase 31: Flatten strict ENUMs to TEXT and normalize property type keys.
--- Run this in the Supabase SQL Editor (safe to re-run).
+-- Phase 31 (revised): Flatten strict ENUMs to TEXT and normalize property type keys.
+-- Drops dependent RLS policies first, alters columns, then recreates policies.
+-- Safe to run in Supabase SQL Editor.
 
 BEGIN;
 
 -- ---------------------------------------------------------------------------
--- 1. Flatten ENUM columns on properties & requests to TEXT
+-- 1. Drop RLS policies that block column type changes
+--    ("View properties" references visibility; drop all properties/requests
+--     policies to avoid any dependency issues during ALTER COLUMN)
+-- ---------------------------------------------------------------------------
+
+DROP POLICY IF EXISTS "View properties" ON properties;
+DROP POLICY IF EXISTS "Insert properties" ON properties;
+DROP POLICY IF EXISTS "Update/Delete properties" ON properties;
+
+DROP POLICY IF EXISTS "View company requests" ON requests;
+DROP POLICY IF EXISTS "Insert requests" ON requests;
+DROP POLICY IF EXISTS "Update/Delete requests" ON requests;
+
+-- ---------------------------------------------------------------------------
+-- 2. Flatten ENUM columns on properties & requests to TEXT
 -- ---------------------------------------------------------------------------
 
 ALTER TABLE properties
@@ -29,7 +44,7 @@ ALTER TABLE requests
   ALTER COLUMN status TYPE TEXT USING status::text;
 
 -- ---------------------------------------------------------------------------
--- 2. Drop unused ENUM types (user_role stays on users.role)
+-- 3. Drop unused ENUM types (user_role stays on users.role)
 -- ---------------------------------------------------------------------------
 
 DROP TYPE IF EXISTS property_type;
@@ -39,7 +54,7 @@ DROP TYPE IF EXISTS request_status;
 DROP TYPE IF EXISTS visibility_type;
 
 -- ---------------------------------------------------------------------------
--- 3. Normalize legacy Arabic / old English enum values → canonical keys
+-- 4. Normalize legacy Arabic / old English enum values → canonical keys
 -- ---------------------------------------------------------------------------
 
 UPDATE properties
@@ -91,7 +106,7 @@ END
 WHERE type IS NOT NULL;
 
 -- ---------------------------------------------------------------------------
--- 4. Ensure all frontend-expected columns exist
+-- 5. Ensure all frontend-expected columns exist
 -- ---------------------------------------------------------------------------
 
 ALTER TABLE properties
@@ -111,6 +126,34 @@ ALTER TABLE requests
   ADD COLUMN IF NOT EXISTS custom_neighborhood TEXT,
   ADD COLUMN IF NOT EXISTS city TEXT;
 
--- city already exists on both tables from init schema; IF NOT EXISTS is harmless.
+-- ---------------------------------------------------------------------------
+-- 6. Recreate RLS policies (exact originals from init schema)
+-- ---------------------------------------------------------------------------
+
+CREATE POLICY "View properties" ON properties FOR SELECT
+  TO authenticated
+  USING (company_id = private_schema.get_user_company_id() OR visibility = 'global');
+
+CREATE POLICY "Insert properties" ON properties FOR INSERT
+  TO authenticated
+  WITH CHECK (company_id = private_schema.get_user_company_id() AND agent_id = private_schema.get_auth_user());
+
+CREATE POLICY "Update/Delete properties" ON properties FOR ALL
+  TO authenticated
+  USING ((agent_id = private_schema.get_auth_user()) OR private_schema.is_admin())
+  WITH CHECK ((agent_id = private_schema.get_auth_user()) OR private_schema.is_admin());
+
+CREATE POLICY "View company requests" ON requests FOR SELECT
+  TO authenticated
+  USING (company_id = private_schema.get_user_company_id());
+
+CREATE POLICY "Insert requests" ON requests FOR INSERT
+  TO authenticated
+  WITH CHECK (company_id = private_schema.get_user_company_id() AND agent_id = private_schema.get_auth_user());
+
+CREATE POLICY "Update/Delete requests" ON requests FOR ALL
+  TO authenticated
+  USING ((agent_id = private_schema.get_auth_user()) OR private_schema.is_admin())
+  WITH CHECK ((agent_id = private_schema.get_auth_user()) OR private_schema.is_admin());
 
 COMMIT;
