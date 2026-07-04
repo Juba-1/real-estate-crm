@@ -1,0 +1,6 @@
+
+- DATA NORMALIZATION: `properties` table (Public) is STRICTLY separated from `property_owners` (Confidential).
+- RLS SECURITY: All RLS policies must use `SECURITY DEFINER` functions located in a `private_schema`.
+- MULTI-TENANT: Every core table includes a `company_id`.
+- NEXT.JS ROUTING: Never swallow `redirect()`. Always use `if (isRedirectError(error)) throw error;`.
+- SUPABASE: Use `@supabase/ssr` for all clients. Do not alter DB relations without explicit SQL migrations first.

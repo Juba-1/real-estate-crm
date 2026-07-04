@@ -1,0 +1,69 @@
+"use server"
+
+import { revalidatePath } from "next/cache"
+
+import { createClient } from "@/lib/supabase/server"
+import { extractPropertyMediaPaths } from "@/lib/supabase/storage"
+import type { PropertyStatus } from "@/types/property"
+
+export type UpdatePropertyStatusResult = {
+  error: string
+} | null
+
+export async function updatePropertyStatus(
+  propertyId: string,
+  newStatus: PropertyStatus,
+  deleteImages: boolean,
+  currentImageUrls: string[]
+): Promise<UpdatePropertyStatusResult> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return { error: "You must be signed in to update property status." }
+  }
+
+  if (deleteImages && currentImageUrls.length > 0) {
+    const storagePaths = extractPropertyMediaPaths(currentImageUrls)
+
+    if (storagePaths.length > 0) {
+      const { error: storageError } = await supabase.storage
+        .from("property_media")
+        .remove(storagePaths)
+
+      if (storageError) {
+        return { error: storageError.message }
+      }
+    }
+
+    const { error: updateError } = await supabase
+      .from("properties")
+      .update({
+        status: newStatus,
+        images: [],
+        status_updated_at: new Date().toISOString(),
+      })
+      .eq("id", propertyId)
+      .eq("agent_id", user.id)
+
+    if (updateError) {
+      return { error: updateError.message }
+    }
+  } else {
+    const { error: updateError } = await supabase
+      .from("properties")
+      .update({ status: newStatus })
+      .eq("id", propertyId)
+      .eq("agent_id", user.id)
+
+    if (updateError) {
+      return { error: updateError.message }
+    }
+  }
+
+  revalidatePath("/dashboard/my-properties")
+  return null
+}
