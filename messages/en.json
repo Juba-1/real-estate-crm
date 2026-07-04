@@ -32,6 +32,16 @@
     "empty": "No new notifications",
     "markAllAsRead": "Mark all as read"
   },
+  "pushNotifications": {
+    "enable": "Enable browser push notifications",
+    "disable": "Disable browser push notifications",
+    "enabled": "Push notifications enabled",
+    "disabled": "Push notifications disabled",
+    "denied": "Notification permission was denied in the browser",
+    "unsupported": "This browser does not support push notifications",
+    "missingVapid": "VAPID keys are not configured on the server",
+    "failed": "Could not update push notification settings"
+  },
   "roles": {
     "superAdmin": "Super Admin",
     "admin": "Admin",

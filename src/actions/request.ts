@@ -6,6 +6,7 @@ import { createCompanyNotification } from "@/actions/notifications"
 import { createClient } from "@/lib/supabase/server"
 import { isNeighborhoodOther, isPropertyTypeOther } from "@/lib/constants/property-types"
 import { formatPropertyType } from "@/lib/property-utils"
+import { sendCompanyPushNotification } from "@/lib/push/send-company-push"
 import {
   insertRequestSchema,
   type InsertRequestInput,
@@ -73,11 +74,20 @@ export async function addRequest(
     ? parsed.data.custom_neighborhood?.trim() || parsed.data.city
     : parsed.data.neighborhood?.trim() || parsed.data.city
 
+  const notificationTitle = "طلب عقاري جديد"
+  const notificationBody = `تم إضافة طلب جديد: ${requestType} في ${neighborhood}`
+
   await createCompanyNotification(
     profile.company_id,
-    "طلب عقاري جديد",
-    `تم إضافة طلب جديد: ${requestType} في ${neighborhood}`
+    notificationTitle,
+    notificationBody
   )
+
+  await sendCompanyPushNotification(profile.company_id, user.id, {
+    title: notificationTitle,
+    body: notificationBody,
+    url: "/dashboard/requests",
+  })
 
   revalidatePath("/dashboard/requests")
   return null

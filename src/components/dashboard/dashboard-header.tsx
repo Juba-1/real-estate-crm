@@ -9,6 +9,7 @@ import { DashboardBrand } from "@/components/dashboard/dashboard-brand"
 import { SidebarNav } from "@/components/dashboard/sidebar-nav"
 import { LanguageSwitcher } from "@/components/language-switcher"
 import { NotificationsDropdown } from "@/components/notifications-dropdown"
+import { PushNotificationManager } from "@/components/push-notification-manager"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -101,6 +102,7 @@ export function DashboardHeader({
       </div>
 
       <div className="flex items-center gap-2">
+        <PushNotificationManager />
         <NotificationsDropdown />
         <ThemeToggle />
         <LanguageSwitcher />

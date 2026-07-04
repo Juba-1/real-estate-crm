@@ -6,6 +6,9 @@ import { isRedirectError } from "next/dist/client/components/redirect-error"
 
 import { createCompanyNotification } from "@/actions/notifications"
 import { createClient } from "@/lib/supabase/server"
+import { isNeighborhoodOther, isPropertyTypeOther } from "@/lib/constants/property-types"
+import { formatPropertyType } from "@/lib/property-utils"
+import { sendCompanyPushNotification } from "@/lib/push/send-company-push"
 import { QUOTA_EXCEEDED } from "@/lib/quota"
 import {
   insertPropertySchema,
@@ -177,6 +180,30 @@ export async function addProperty(
         error: ownerError.message ?? "Failed to save confidential owner details.",
       }
     }
+
+    const propertyTypeLabel = isPropertyTypeOther(publicFields.type)
+      ? custom_property_type?.trim() ||
+        formatPropertyType(publicFields.type)
+      : formatPropertyType(publicFields.type)
+
+    const neighborhoodLabel = isNeighborhoodOther(publicFields.neighborhood)
+      ? custom_neighborhood?.trim() || publicFields.city
+      : publicFields.neighborhood
+
+    const notificationTitle = "عقار جديد"
+    const notificationBody = `تم إضافة عقار جديد: ${propertyTypeLabel} في ${neighborhoodLabel}`
+
+    await createCompanyNotification(
+      profile.company_id,
+      notificationTitle,
+      notificationBody
+    )
+
+    await sendCompanyPushNotification(profile.company_id, user.id, {
+      title: notificationTitle,
+      body: notificationBody,
+      url: "/dashboard/search",
+    })
 
     revalidatePath("/dashboard/my-properties")
     return redirectTo("/dashboard/my-properties")
