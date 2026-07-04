@@ -17,10 +17,13 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart"
+import type { PlatformGrowthPoint } from "@/lib/data/super-admin"
 
-const MOCK_COUNTS = [4, 7, 5, 9, 12, 8]
+type PlatformGrowthChartProps = {
+  data: PlatformGrowthPoint[]
+}
 
-export function PlatformGrowthChart() {
+export function PlatformGrowthChart({ data }: PlatformGrowthChartProps) {
   const t = useTranslations("superAdmin")
   const locale = useLocale()
 
@@ -31,20 +34,17 @@ export function PlatformGrowthChart() {
     },
   } satisfies ChartConfig
 
-  const chartData = useMemo(() => {
-    const now = new Date()
-
-    return MOCK_COUNTS.map((count, index) => {
-      const date = new Date(now.getFullYear(), now.getMonth() - (5 - index), 1)
-
-      return {
-        label: date.toLocaleDateString(locale === "ar" ? "ar-SA" : "en-US", {
-          month: "short",
-        }),
-        companies: count,
-      }
-    })
-  }, [locale])
+  const chartData = useMemo(
+    () =>
+      data.map((point) => ({
+        label: new Date(point.year, point.month - 1, 1).toLocaleDateString(
+          locale === "ar" ? "ar-SA" : "en-US",
+          { month: "short" }
+        ),
+        companies: point.companies,
+      })),
+    [data, locale]
+  )
 
   return (
     <Card className="h-full border-border/80 shadow-sm">

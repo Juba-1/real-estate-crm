@@ -4,14 +4,16 @@ import { PlatformGrowthChart } from "@/components/super-admin/platform-growth-ch
 import { RecentCompaniesCard } from "@/components/super-admin/recent-companies-card"
 import { SuperAdminMetricCards } from "@/components/super-admin/super-admin-metric-cards"
 import {
+  getPlatformGrowthData,
   getRecentCompanies,
   getSuperAdminStats,
 } from "@/lib/data/super-admin"
 
 export default async function SuperAdminOverviewPage() {
-  const [stats, recentCompanies, t] = await Promise.all([
+  const [stats, recentCompanies, growthData, t] = await Promise.all([
     getSuperAdminStats(),
     getRecentCompanies(5),
+    getPlatformGrowthData(),
     getTranslations("superAdmin"),
   ])
 
@@ -37,7 +39,7 @@ export default async function SuperAdminOverviewPage() {
       />
 
       <div className="grid gap-6 md:grid-cols-2">
-        <PlatformGrowthChart />
+        <PlatformGrowthChart data={growthData} />
         <RecentCompaniesCard companies={recentCompanies} />
       </div>
     </div>

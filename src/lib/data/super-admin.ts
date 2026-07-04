@@ -69,6 +69,74 @@ export async function getAllCompanies(): Promise<CompanyRow[]> {
   return data ?? []
 }
 
+export type PlatformGrowthPoint = {
+  year: number
+  month: number
+  companies: number
+}
+
+function buildLastSixMonthBuckets(referenceDate = new Date()) {
+  const buckets: PlatformGrowthPoint[] = []
+
+  for (let index = 0; index < 6; index += 1) {
+    const date = new Date(
+      referenceDate.getFullYear(),
+      referenceDate.getMonth() - (5 - index),
+      1
+    )
+
+    buckets.push({
+      year: date.getFullYear(),
+      month: date.getMonth() + 1,
+      companies: 0,
+    })
+  }
+
+  return buckets
+}
+
+export async function getPlatformGrowthData(): Promise<PlatformGrowthPoint[]> {
+  const auth = await requireSuperAdmin()
+  if ("error" in auth) {
+    throw new Error(auth.error)
+  }
+
+  const adminClient = createAdminClient()
+  const buckets = buildLastSixMonthBuckets()
+  const rangeStart = new Date(buckets[0].year, buckets[0].month - 1, 1)
+
+  const { data, error } = await adminClient
+    .from("companies")
+    .select("created_at")
+    .gte("created_at", rangeStart.toISOString())
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  const countsByMonth = new Map<string, number>(
+    buckets.map((bucket) => [
+      `${bucket.year}-${bucket.month}`,
+      0,
+    ])
+  )
+
+  for (const company of data ?? []) {
+    const createdAt = new Date(company.created_at)
+    const key = `${createdAt.getFullYear()}-${createdAt.getMonth() + 1}`
+    const current = countsByMonth.get(key)
+
+    if (current !== undefined) {
+      countsByMonth.set(key, current + 1)
+    }
+  }
+
+  return buckets.map((bucket) => ({
+    ...bucket,
+    companies: countsByMonth.get(`${bucket.year}-${bucket.month}`) ?? 0,
+  }))
+}
+
 export async function getRecentCompanies(limit = 5): Promise<CompanyRow[]> {
   const auth = await requireSuperAdmin()
   if ("error" in auth) {
