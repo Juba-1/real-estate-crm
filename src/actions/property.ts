@@ -205,6 +205,11 @@ export async function addProperty(
       url: "/dashboard/search",
     })
 
+    console.log("[push] addProperty broadcast dispatched", {
+      companyId: profile.company_id,
+      actorUserId: user.id,
+    })
+
     revalidatePath("/dashboard/my-properties")
     return redirectTo("/dashboard/my-properties")
   } catch (error) {

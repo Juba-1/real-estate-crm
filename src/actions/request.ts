@@ -89,6 +89,11 @@ export async function addRequest(
     url: "/dashboard/requests",
   })
 
+  console.log("[push] addRequest broadcast dispatched", {
+    companyId: profile.company_id,
+    actorUserId: user.id,
+  })
+
   revalidatePath("/dashboard/requests")
   return null
 }

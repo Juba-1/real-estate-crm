@@ -1,27 +1,51 @@
 self.addEventListener("push", (event) => {
-  let payload = {
+  const fallback = {
     title: "إشعار جديد",
     body: "",
     url: "/dashboard",
   }
 
-  if (event.data) {
-    try {
-      payload = { ...payload, ...event.data.json() }
-    } catch {
-      payload.body = event.data.text()
-    }
-  }
-
   event.waitUntil(
-    self.registration.showNotification(payload.title, {
-      body: payload.body,
-      icon: "/favicon.ico",
-      badge: "/favicon.ico",
-      data: { url: payload.url },
-      tag: "real-estate-crm-push",
-      renotify: true,
-    })
+    (async () => {
+      let payload = { ...fallback }
+
+      try {
+        if (!event.data) {
+          console.warn("[sw] push event received with no data")
+        } else {
+          const text = event.data.text()
+
+          try {
+            payload = { ...fallback, ...JSON.parse(text) }
+          } catch {
+            payload.body = text
+          }
+        }
+
+        console.log("[sw] showing notification", {
+          title: payload.title,
+          bodyLength: payload.body?.length ?? 0,
+          url: payload.url,
+        })
+
+        await self.registration.showNotification(payload.title, {
+          body: payload.body,
+          icon: "/favicon.ico",
+          badge: "/favicon.ico",
+          data: { url: payload.url ?? "/dashboard" },
+          tag: `real-estate-crm-${Date.now()}`,
+        })
+      } catch (error) {
+        console.error("[sw] push handler failed", error)
+
+        await self.registration.showNotification(fallback.title, {
+          body: fallback.body || "لديك إشعار جديد",
+          icon: "/favicon.ico",
+          badge: "/favicon.ico",
+          data: { url: fallback.url },
+        })
+      }
+    })()
   )
 })
 
