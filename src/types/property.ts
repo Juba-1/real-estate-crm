@@ -77,6 +77,7 @@ export const insertPropertySchema = z
     shops_count: optionalPositiveNumber,
     has_annex: optionalBoolean,
     is_direct: z.boolean(),
+    intermediaries: z.string().trim().optional().nullable(),
     general_notes: z.string().trim().optional(),
     owner_name: z.string().trim().min(1, "Owner name is required"),
     owner_phone: z.string().trim().min(1, "Owner phone is required"),
@@ -186,6 +187,7 @@ export type InsertPropertyInput = {
   shops_count?: number
   has_annex?: boolean
   is_direct: boolean
+  intermediaries?: string | null
   general_notes?: string
   owner_name: string
   owner_phone: string
@@ -221,6 +223,7 @@ export type InsertPropertyFormValues = {
   shops_count?: string | number
   has_annex?: boolean
   is_direct: boolean
+  intermediaries?: string | null
   general_notes?: string
   owner_name: string
   owner_phone: string

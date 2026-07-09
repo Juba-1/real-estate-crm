@@ -33,6 +33,7 @@ export function editablePropertyToFormValues(
     shops_count: property.shops_count ?? undefined,
     has_annex: property.has_annex ?? false,
     is_direct: property.is_direct,
+    intermediaries: property.intermediaries ?? "",
     general_notes: property.general_notes ?? "",
     owner_name: property.property_owners[0]?.owner_name ?? "",
     owner_phone: property.property_owners[0]?.owner_phone ?? "",

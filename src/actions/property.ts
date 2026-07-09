@@ -131,6 +131,7 @@ export async function addProperty(
       apartments_count,
       shops_count,
       has_annex,
+      intermediaries,
       ...publicFields
     } = parsed.data
 
@@ -153,6 +154,7 @@ export async function addProperty(
         shops_count: shops_count ?? null,
         has_annex: has_annex ?? null,
         is_direct: publicFields.is_direct,
+        intermediaries: intermediaries?.trim() || null,
         general_notes: general_notes || null,
         images: images ?? [],
       })
@@ -389,6 +391,7 @@ export async function updateProperty(
     apartments_count,
     shops_count,
     has_annex,
+    intermediaries,
     ...publicFields
   } = parsed.data
 
@@ -409,6 +412,7 @@ export async function updateProperty(
       shops_count: shops_count ?? null,
       has_annex: has_annex ?? null,
       is_direct: publicFields.is_direct,
+      intermediaries: intermediaries?.trim() || null,
       general_notes: general_notes || null,
       images: images ?? [],
     })

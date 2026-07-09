@@ -161,7 +161,8 @@
     "apartmentsCount": "عدد الشقق",
     "shopsCount": "عدد المحلات",
     "hasAnnex": "يوجد ملحق",
-    "hasAnnexHint": "فعّل إذا كانت الفيلا تحتوي على ملحق مستقل."
+    "hasAnnexHint": "فعّل إذا كانت الفيلا تحتوي على ملحق مستقل.",
+    "intermediaries": "الوسطاء العقاريين"
   },
   "placeholders": {
     "selectType": "حدد النوع",
@@ -183,6 +184,7 @@
     "floorsCount": "5",
     "apartmentsCount": "12",
     "shopsCount": "3",
+    "intermediaries": "اذكر أسماء أو أرقام تواصل الوسطاء في هذا العرض...",
     "specsNotes": "زاوية، مطبخ مجدد، غرفة خادمة...",
     "generalNotes": "ملاحظات داخلية مرئية لوسطاء المكتب...",
     "ownerName": "الاسم الكامل للمالك",

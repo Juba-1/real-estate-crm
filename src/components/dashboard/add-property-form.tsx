@@ -108,6 +108,7 @@ const EMPTY_DEFAULT_VALUES: InsertPropertyFormValues = {
   shops_count: undefined,
   has_annex: false,
   is_direct: true,
+  intermediaries: "",
   general_notes: "",
   owner_name: "",
   owner_phone: "",
@@ -158,6 +159,7 @@ export function AddPropertyForm({
   const selectedCity = form.watch("city")
   const selectedType = form.watch("type")
   const selectedNeighborhood = form.watch("neighborhood")
+  const isDirect = form.watch("is_direct")
   const showCustomType = isPropertyTypeOther(selectedType)
   const showCustomNeighborhood = isNeighborhoodOther(selectedNeighborhood)
   const neighborhoods = getNeighborhoodsForCity(selectedCity)
@@ -573,6 +575,30 @@ export function AddPropertyForm({
                 </FormItem>
               )}
             />
+
+            {!isDirect ? (
+              <FormField
+                control={form.control}
+                name="intermediaries"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{tFields("intermediaries")}</FormLabel>
+                    <FormDescription>
+                      {tPlaceholders("intermediaries")}
+                    </FormDescription>
+                    <FormControl>
+                      <Textarea
+                        placeholder={tPlaceholders("intermediaries")}
+                        className="min-h-24 resize-y"
+                        {...field}
+                        value={field.value ?? ""}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ) : null}
 
             <div className="grid gap-4 sm:grid-cols-3">
               {shouldShowLandFields(selectedType) ? (

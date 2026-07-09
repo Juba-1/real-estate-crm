@@ -161,7 +161,8 @@
     "apartmentsCount": "Number of apartments",
     "shopsCount": "Number of shops",
     "hasAnnex": "Has annex",
-    "hasAnnexHint": "Enable if the villa includes a separate annex."
+    "hasAnnexHint": "Enable if the villa includes a separate annex.",
+    "intermediaries": "Intermediaries / Brokers"
   },
   "placeholders": {
     "selectType": "Select type",
@@ -183,6 +184,7 @@
     "floorsCount": "5",
     "apartmentsCount": "12",
     "shopsCount": "3",
+    "intermediaries": "List broker names or contact numbers for this listing...",
     "specsNotes": "Corner plot, renovated kitchen, maid room...",
     "generalNotes": "Internal listing notes visible to company agents...",
     "ownerName": "Owner full name",

@@ -50,6 +50,7 @@ export type EditableProperty = MyProperty & {
   shops_count: number | null
   has_annex: boolean | null
   is_direct: boolean
+  intermediaries: string | null
   general_notes: string | null
 }
 
@@ -226,6 +227,7 @@ const EDITABLE_PROPERTY_SELECT = `
   shops_count,
   has_annex,
   is_direct,
+  intermediaries,
   general_notes,
   created_at,
   property_owners (
