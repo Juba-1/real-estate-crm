@@ -9,6 +9,7 @@
 1. Requests had **no post-create** urgent control (create-only).
 2. Properties required **full edit** for urgent changes (card was badge-only).
 3. Activate/clear silently no-op’d for **admins** on another agent’s row (`agent_id = auth` only).
+4. **Hotfix:** `activate_urgent_*` called `private_schema.*` under SECURITY INVOKER → `permission denied for schema private_schema` (authenticated has EXECUTE on helpers but no schema USAGE by design). Fixed in `20260808150000_fix_urgent_activate_no_private_schema.sql` using `auth.uid()` + `public.users` instead of granting schema USAGE.
 
 ### Notifications
 1. Server **VAPID soft-fail** (log only) → push never sent when keys missing.

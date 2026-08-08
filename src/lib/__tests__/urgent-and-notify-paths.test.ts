@@ -5,6 +5,7 @@ import {
   localizeDashboardPath,
 } from "@/lib/notifications/localize-path"
 import { shouldPersistOpportunityReceipt } from "@/lib/intelligence/opportunities/notify/policy"
+import { canActivateUrgentForTarget } from "@/lib/urgent-authz"
 import { compareByUrgency, isCurrentlyUrgent } from "@/lib/urgent"
 
 describe("isCurrentlyUrgent", () => {
@@ -36,6 +37,74 @@ describe("compareByUrgency", () => {
     }
     expect(compareByUrgency(urgent, normal)).toBeLessThan(0)
     expect(compareByUrgency(normal, urgent)).toBeGreaterThan(0)
+  })
+})
+
+describe("canActivateUrgentForTarget (RPC auth mirror)", () => {
+  const companyA = "company-a"
+  const companyB = "company-b"
+  const agent1 = "agent-1"
+  const agent2 = "agent-2"
+  const admin = "admin-1"
+
+  it("allows agent on own row", () => {
+    expect(
+      canActivateUrgentForTarget({
+        callerUserId: agent1,
+        callerCompanyId: companyA,
+        callerRole: "agent",
+        targetAgentId: agent1,
+        targetCompanyId: companyA,
+      })
+    ).toBe(true)
+  })
+
+  it("rejects agent on another agent row", () => {
+    expect(
+      canActivateUrgentForTarget({
+        callerUserId: agent1,
+        callerCompanyId: companyA,
+        callerRole: "agent",
+        targetAgentId: agent2,
+        targetCompanyId: companyA,
+      })
+    ).toBe(false)
+  })
+
+  it("allows admin on other agent same company", () => {
+    expect(
+      canActivateUrgentForTarget({
+        callerUserId: admin,
+        callerCompanyId: companyA,
+        callerRole: "admin",
+        targetAgentId: agent2,
+        targetCompanyId: companyA,
+      })
+    ).toBe(true)
+  })
+
+  it("rejects cross-company even for admin", () => {
+    expect(
+      canActivateUrgentForTarget({
+        callerUserId: admin,
+        callerCompanyId: companyA,
+        callerRole: "admin",
+        targetAgentId: agent2,
+        targetCompanyId: companyB,
+      })
+    ).toBe(false)
+  })
+
+  it("rejects unauthorized user from other company", () => {
+    expect(
+      canActivateUrgentForTarget({
+        callerUserId: agent1,
+        callerCompanyId: companyA,
+        callerRole: "agent",
+        targetAgentId: agent2,
+        targetCompanyId: companyB,
+      })
+    ).toBe(false)
   })
 })
 
