@@ -7,6 +7,33 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim())
 })
 
+function isSafeInternalPath(path) {
+  if (!path || typeof path !== "string") {
+    return false
+  }
+
+  const trimmed = path.trim()
+  if (!trimmed.startsWith("/") || trimmed.startsWith("//")) {
+    return false
+  }
+
+  if (trimmed.includes("://") || trimmed.includes("\\")) {
+    return false
+  }
+
+  return true
+}
+
+function stableTag(title, url) {
+  const raw = `${title || ""}|${url || ""}`
+  let hash = 0
+  for (let i = 0; i < raw.length; i += 1) {
+    hash = (hash << 5) - hash + raw.charCodeAt(i)
+    hash |= 0
+  }
+  return `deerah-${Math.abs(hash)}`
+}
+
 self.addEventListener("push", (event) => {
   const fallback = {
     title: "إشعار جديد",
@@ -31,12 +58,16 @@ self.addEventListener("push", (event) => {
           }
         }
 
-        await self.registration.showNotification(payload.title, {
-          body: payload.body,
+        const rawUrl = payload.url ?? fallback.url
+        const url = isSafeInternalPath(rawUrl) ? rawUrl : fallback.url
+
+        await self.registration.showNotification(payload.title || fallback.title, {
+          body: payload.body || "",
           icon: "/icons/icon-192.png",
           badge: "/icons/icon-192.png",
-          data: { url: payload.url ?? "/ar/dashboard" },
-          tag: `real-estate-crm-${Date.now()}`,
+          data: { url },
+          tag: stableTag(payload.title, url),
+          renotify: true,
         })
       } catch (error) {
         console.error("[sw] push handler failed", error)
@@ -46,6 +77,7 @@ self.addEventListener("push", (event) => {
           icon: "/icons/icon-192.png",
           badge: "/icons/icon-192.png",
           data: { url: fallback.url },
+          tag: "deerah-fallback",
         })
       }
     })()
@@ -55,15 +87,33 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close()
 
-  const targetUrl = event.notification.data?.url || "/ar/dashboard"
+  const rawUrl = event.notification.data?.url || "/ar/dashboard"
+  const targetUrl = isSafeInternalPath(rawUrl) ? rawUrl : "/ar/dashboard"
 
   event.waitUntil(
     clients
       .matchAll({ type: "window", includeUncontrolled: true })
-      .then((windowClients) => {
+      .then(async (windowClients) => {
         for (const client of windowClients) {
-          if (client.url.includes(targetUrl) && "focus" in client) {
-            return client.focus()
+          try {
+            const clientPath = new URL(client.url).pathname
+            if (
+              (clientPath === targetUrl ||
+                clientPath.startsWith(targetUrl) ||
+                client.url.includes(targetUrl)) &&
+              "focus" in client
+            ) {
+              if ("navigate" in client && typeof client.navigate === "function") {
+                try {
+                  await client.navigate(targetUrl)
+                } catch {
+                  // Focus is enough if navigate is unsupported.
+                }
+              }
+              return client.focus()
+            }
+          } catch {
+            // Continue searching.
           }
         }
 

@@ -10,6 +10,7 @@ import {
   OPPORTUNITY_NOTIFY_VERSION,
   PRIORITY_RANK,
   opportunityFingerprint,
+  shouldPersistOpportunityReceipt,
   type NotificationPriority,
   type OpportunityNotifyEventType,
 } from "@/lib/intelligence/opportunities/notify/policy"
@@ -24,11 +25,13 @@ import {
   upsertOpportunityReceipt,
 } from "@/lib/data/intelligence/opportunity-notify"
 import { notifyCompanyUsers } from "@/lib/notifications/notify-company"
+import { localizeDashboardPath } from "@/lib/notifications/localize-path"
 import { sendCompanyPushNotification } from "@/lib/push/send-company-push"
 import { resolveDistrictLabel } from "@/lib/intelligence/shared"
 import { isNeighborhoodOther } from "@/lib/constants/property-types"
 import type { OpportunityReason } from "@/types/intelligence/opportunities"
 import type { OpportunityLevel } from "@/types/intelligence/opportunities"
+import { getLocale } from "next-intl/server"
 
 export type OpportunityNotifyTrigger =
   | "property_saved"
@@ -124,7 +127,10 @@ export async function dispatchOpportunityNotifications(params: {
         direction: top[0]!.direction,
       })
 
-      await notifyCompanyUsers({
+      const locale = await getLocale()
+      const pushUrl = localizeDashboardPath(locale, copy.linkPath)
+
+      const notifyResult = await notifyCompanyUsers({
         actorUserId: params.actorUserId,
         companyId: params.companyId,
         recipientUserIds: [recipientUserId],
@@ -133,13 +139,22 @@ export async function dispatchOpportunityNotifications(params: {
         linkPath: copy.linkPath,
       })
 
+      if (!shouldPersistOpportunityReceipt(notifyResult)) {
+        console.error("[opp-notify] in-app notify failed; skipping receipt", {
+          companyId: params.companyId,
+          recipientUserId,
+          error: notifyResult?.error,
+        })
+        continue
+      }
+
       await sendCompanyPushNotification(
         params.companyId,
         params.actorUserId,
         {
           title: copy.title,
           body: copy.message,
-          url: copy.linkPath,
+          url: pushUrl,
         },
         [recipientUserId]
       )

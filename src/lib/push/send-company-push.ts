@@ -3,6 +3,7 @@ import "server-only"
 import webpush from "web-push"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { createClient } from "@/lib/supabase/server"
 
 export type CompanyPushPayload = {
   title: string
@@ -48,6 +49,7 @@ function ensureVapidConfigured(): boolean {
 
   if (!publicKey || !privateKey) {
     console.error(`${LOG_PREFIX} VAPID keys missing`, {
+      category: "vapid_missing",
       hasPublicKey: Boolean(publicKey),
       hasPrivateKey: Boolean(privateKey),
     })
@@ -63,7 +65,10 @@ function ensureVapidConfigured(): boolean {
         publicKeyPrefix: publicKey.slice(0, 8),
       })
     } catch (error) {
-      console.error(`${LOG_PREFIX} setVapidDetails failed`, error)
+      console.error(`${LOG_PREFIX} setVapidDetails failed`, {
+        category: "vapid_invalid",
+        message: error instanceof Error ? error.message : String(error),
+      })
       return false
     }
   }
@@ -110,6 +115,7 @@ function toWebPushSubscription(
 
   if (!endpoint || !p256dh || !auth) {
     console.error(`${LOG_PREFIX} Invalid stored subscription shape`, {
+      category: "invalid_subscription",
       subscriptionId: row.id,
       userId: row.user_id,
       hasEndpoint: Boolean(endpoint),
@@ -128,21 +134,56 @@ function toWebPushSubscription(
 /**
  * Sends Web Push alerts to subscriptions in `companyId`.
  * ALWAYS filters by company_id. Optional recipientUserIds narrows delivery.
+ * Requires actor session + company bind before service-role fan-out.
+ * Soft-fails — never throws to business callers.
  */
 export async function sendCompanyPushNotification(
   companyId: string,
-  excludeUserId: string | null,
+  actorUserId: string | null,
   payload: CompanyPushPayload,
   recipientUserIds?: string[]
 ): Promise<void> {
   console.log(`${LOG_PREFIX} broadcast start`, {
+    category: "dispatch_attempted",
     companyId,
-    excludeUserId,
+    actorUserId,
     title: payload.title,
-    recipientCount: recipientUserIds?.length,
+    recipientFilter: recipientUserIds?.length ?? "company",
   })
 
   try {
+    if (actorUserId) {
+      const supabase = await createClient()
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser()
+
+      if (authError || !user || user.id !== actorUserId) {
+        console.error(`${LOG_PREFIX} rejected: actor session mismatch`, {
+          category: "authz_rejected",
+          companyId,
+        })
+        return
+      }
+
+      const { data: profile } = await supabase
+        .from("users")
+        .select("company_id, role")
+        .eq("id", actorUserId)
+        .maybeSingle()
+
+      const isSuperAdmin = profile?.role === "super_admin"
+      if (!profile || (!isSuperAdmin && profile.company_id !== companyId)) {
+        console.error(`${LOG_PREFIX} rejected: company binding failed`, {
+          category: "authz_rejected",
+          companyId,
+          actorUserId,
+        })
+        return
+      }
+    }
+
     if (!ensureVapidConfigured()) {
       return
     }
@@ -154,8 +195,8 @@ export async function sendCompanyPushNotification(
       .select("id, user_id, company_id, endpoint, subscription")
       .eq("company_id", companyId)
 
-    if (excludeUserId) {
-      query = query.neq("user_id", excludeUserId)
+    if (actorUserId) {
+      query = query.neq("user_id", actorUserId)
     }
 
     if (recipientUserIds && recipientUserIds.length > 0) {
@@ -166,6 +207,7 @@ export async function sendCompanyPushNotification(
 
     if (error) {
       console.error(`${LOG_PREFIX} subscription query failed`, {
+        category: "subscription_query_failed",
         companyId,
         message: error.message,
         code: error.code,
@@ -175,29 +217,25 @@ export async function sendCompanyPushNotification(
 
     const subscriptions = (data ?? []) as PushSubscriptionRow[]
 
-    console.log(`${LOG_PREFIX} subscriptions fetched`, {
-      companyId,
-      excludeUserId,
-      count: subscriptions.length,
-      recipients: subscriptions.map((row) => ({
-        subscriptionId: row.id,
-        userId: row.user_id,
-        endpointHost: safeEndpointHost(row.endpoint),
-      })),
-    })
-
     if (subscriptions.length === 0) {
       console.warn(`${LOG_PREFIX} no subscriptions to notify`, {
+        category: "no_subscriptions",
         companyId,
-        excludeUserId,
+        actorUserId,
       })
       return
     }
 
+    console.log(`${LOG_PREFIX} subscriptions fetched`, {
+      category: "subscription_count",
+      companyId,
+      count: subscriptions.length,
+    })
+
     const message = JSON.stringify({
       title: payload.title,
       body: payload.body,
-      url: payload.url ?? "/dashboard",
+      url: payload.url ?? "/ar/dashboard",
     })
 
     const results = await Promise.allSettled(
@@ -217,28 +255,30 @@ export async function sendCompanyPushNotification(
           }
         )
 
-        console.log(`${LOG_PREFIX} sendNotification success`, {
-          subscriptionId: row.id,
-          userId: row.user_id,
-          endpointHost: safeEndpointHost(pushSubscription.endpoint),
-          statusCode: response.statusCode,
-        })
-
         return response
       })
     )
 
     const staleIds: string[] = []
+    let succeeded = 0
+    let failed = 0
 
     results.forEach((result, index) => {
       const row = subscriptions[index]
-      if (!row || result.status === "fulfilled") {
+      if (!row) {
         return
       }
 
+      if (result.status === "fulfilled") {
+        succeeded += 1
+        return
+      }
+
+      failed += 1
       const details = getPushErrorDetails(result.reason)
 
       console.error(`${LOG_PREFIX} sendNotification failed`, {
+        category: "send_failed",
         subscriptionId: row.id,
         userId: row.user_id,
         endpointHost: safeEndpointHost(row.endpoint),
@@ -252,11 +292,11 @@ export async function sendCompanyPushNotification(
     })
 
     console.log(`${LOG_PREFIX} broadcast complete`, {
+      category: "dispatch_complete",
       companyId,
-      attempted: subscriptions.length,
-      succeeded: results.filter((result) => result.status === "fulfilled")
-        .length,
-      failed: results.filter((result) => result.status === "rejected").length,
+      subscriptionCount: subscriptions.length,
+      succeeded,
+      failed,
       staleRemoved: staleIds.length,
     })
 
@@ -268,12 +308,21 @@ export async function sendCompanyPushNotification(
 
       if (deleteError) {
         console.error(`${LOG_PREFIX} stale subscription cleanup failed`, {
+          category: "stale_cleanup_failed",
           message: deleteError.message,
-          staleIds,
+          staleCount: staleIds.length,
+        })
+      } else {
+        console.log(`${LOG_PREFIX} stale subscriptions removed`, {
+          category: "stale_removed",
+          count: staleIds.length,
         })
       }
     }
   } catch (error) {
-    console.error(`${LOG_PREFIX} broadcast crashed`, error)
+    console.error(`${LOG_PREFIX} broadcast crashed`, {
+      category: "dispatch_crashed",
+      message: error instanceof Error ? error.message : String(error),
+    })
   }
 }

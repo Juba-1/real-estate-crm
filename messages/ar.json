@@ -292,7 +292,10 @@
     "propertyEntity": "عرض",
     "propertyEntityDefinite": "العرض",
     "requestEntity": "طلب",
-    "requestEntityDefinite": "الطلب"
+    "requestEntityDefinite": "الطلب",
+    "removeLabel": "إزالة الاستعجال",
+    "toastMarked": "تم وضع علامة مستعجل",
+    "toastRemoved": "تمت إزالة حالة الاستعجال"
   },
   "identity": {
     "warningTitle": "عقار مشابه محتمل",

@@ -7,12 +7,14 @@ import { suggestFromListingFields } from "@/actions/dictionary"
 import { persistRequestIdentityAfterSave } from "@/actions/intelligence/identity"
 import { notifyOpportunityDiscovery } from "@/actions/intelligence/opportunities"
 import { assertCanManageRequest } from "@/lib/authz/tenant"
-import { createCompanyNotification } from "@/lib/notifications/notify-company"
+import { localizeDashboardPath } from "@/lib/notifications/localize-path"
+import { notifyCompanyUsers } from "@/lib/notifications/notify-company"
 import { createClient } from "@/lib/supabase/server"
 import { EASTERN_CITY_NAMES } from "@/lib/constants/locations"
 import { isNeighborhoodOther, isPropertyTypeOther, PROPERTY_TYPE_VALUES } from "@/lib/constants/property-types"
 import { formatPropertyType } from "@/lib/property-utils"
 import { sendCompanyPushNotification } from "@/lib/push/send-company-push"
+import { getLocale } from "next-intl/server"
 import {
   insertRequestSchema,
   type InsertRequestInput,
@@ -136,24 +138,27 @@ export async function addRequest(
 
   const notificationTitle = "طلب عقاري جديد"
   const notificationBody = `تم إضافة طلب جديد: ${requestType} في ${neighborhood}`
+  const requestsPath = "/dashboard/requests"
 
-  await createCompanyNotification(
-    profile.company_id,
-    notificationTitle,
-    notificationBody,
-    user.id
-  )
+  void (async () => {
+    const locale = await getLocale()
+    const pushUrl = localizeDashboardPath(locale, requestsPath)
 
-  await sendCompanyPushNotification(profile.company_id, user.id, {
-    title: notificationTitle,
-    body: notificationBody,
-    url: "/dashboard/requests",
-  })
+    await notifyCompanyUsers({
+      actorUserId: user.id,
+      companyId: profile.company_id,
+      title: notificationTitle,
+      message: notificationBody,
+      linkPath: requestsPath,
+      excludeActor: true,
+    })
 
-  console.log("[push] addRequest broadcast dispatched", {
-    companyId: profile.company_id,
-    actorUserId: user.id,
-  })
+    await sendCompanyPushNotification(profile.company_id, user.id, {
+      title: notificationTitle,
+      body: notificationBody,
+      url: pushUrl,
+    })
+  })()
 
   revalidatePath("/dashboard/requests")
   return null

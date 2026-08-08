@@ -292,7 +292,10 @@
     "propertyEntity": "listing",
     "propertyEntityDefinite": "listing",
     "requestEntity": "request",
-    "requestEntityDefinite": "request"
+    "requestEntityDefinite": "request",
+    "removeLabel": "Remove urgent",
+    "toastMarked": "Marked as urgent",
+    "toastRemoved": "Urgent status removed"
   },
   "identity": {
     "warningTitle": "Possible duplicate listing",

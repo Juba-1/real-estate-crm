@@ -11,12 +11,17 @@ import {
 } from "@/actions/intelligence/identity"
 import { notifyOpportunityDiscovery } from "@/actions/intelligence/opportunities"
 import { assertCanManageProperty } from "@/lib/authz/tenant"
-import { createCompanyNotification } from "@/lib/notifications/notify-company"
+import { localizeDashboardPath } from "@/lib/notifications/localize-path"
+import {
+  createCompanyNotification,
+  notifyCompanyUsers,
+} from "@/lib/notifications/notify-company"
 import { createClient } from "@/lib/supabase/server"
 import { EASTERN_CITY_NAMES } from "@/lib/constants/locations"
 import { isNeighborhoodOther, isPropertyTypeOther, PROPERTY_TYPE_VALUES } from "@/lib/constants/property-types"
 import { formatPropertyType } from "@/lib/property-utils"
 import { sendCompanyPushNotification } from "@/lib/push/send-company-push"
+import { getLocale } from "next-intl/server"
 import { QUOTA_EXCEEDED } from "@/lib/quota"
 import {
   parseIdentityOverride,
@@ -278,24 +283,27 @@ export async function addProperty(
 
     const notificationTitle = "عقار جديد"
     const notificationBody = `تم إضافة عقار جديد: ${propertyTypeLabel} في ${neighborhoodLabel}`
+    const searchPath = "/dashboard/search"
 
-    await createCompanyNotification(
-      profile.company_id,
-      notificationTitle,
-      notificationBody,
-      user.id
-    )
+    void (async () => {
+      const locale = await getLocale()
+      const pushUrl = localizeDashboardPath(locale, searchPath)
 
-    await sendCompanyPushNotification(profile.company_id, user.id, {
-      title: notificationTitle,
-      body: notificationBody,
-      url: "/dashboard/search",
-    })
+      await notifyCompanyUsers({
+        actorUserId: user.id,
+        companyId: profile.company_id,
+        title: notificationTitle,
+        message: notificationBody,
+        linkPath: searchPath,
+        excludeActor: true,
+      })
 
-    console.log("[push] addProperty broadcast dispatched", {
-      companyId: profile.company_id,
-      actorUserId: user.id,
-    })
+      await sendCompanyPushNotification(profile.company_id, user.id, {
+        title: notificationTitle,
+        body: notificationBody,
+        url: pushUrl,
+      })
+    })()
 
     revalidatePath("/dashboard/my-properties")
     return redirectTo("/dashboard/my-properties")

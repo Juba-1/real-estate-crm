@@ -65,3 +65,13 @@ export function opportunityFingerprint(
 ): string {
   return `prop:${propertyId}|req:${requestId}`
 }
+
+/**
+ * Persist anti-spam receipts only after in-app notify succeeded.
+ * Failed / skipped notify must not suppress future retries.
+ */
+export function shouldPersistOpportunityReceipt(
+  notifyResult: { error: string } | null
+): boolean {
+  return !notifyResult?.error
+}

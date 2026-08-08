@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { ArchiveIcon, CheckIcon, Loader2Icon, XIcon } from "lucide-react"
+import { ArchiveIcon, CheckIcon, Loader2Icon, XIcon, AlertTriangleIcon } from "lucide-react"
 import { useLocale, useTranslations } from "next-intl"
 import { toast } from "sonner"
 
@@ -96,7 +96,10 @@ export function PendingRemovalsPanel({ requests }: PendingRemovalsPanelProps) {
                 </CardTitle>
                 <div className="flex flex-wrap gap-2">
                   {property?.is_urgent ? (
-                    <Badge className={URGENT_BADGE_CLASS}>{tUrgent("badge")}</Badge>
+                    <Badge className={URGENT_BADGE_CLASS}>
+                      <AlertTriangleIcon className="size-3" aria-hidden />
+                      {tUrgent("badge")}
+                    </Badge>
                   ) : null}
                   {property ? (
                     <Badge

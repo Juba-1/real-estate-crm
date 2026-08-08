@@ -7,6 +7,7 @@ import {
   MapPinIcon,
   PencilIcon,
   Trash2Icon,
+  AlertTriangleIcon,
 } from "lucide-react"
 import { useLocale, useTranslations } from "next-intl"
 import { useRouter } from "@/i18n/navigation"
@@ -14,6 +15,7 @@ import { toast } from "sonner"
 
 import { deleteProperty } from "@/actions/property"
 import { updatePropertyStatus } from "@/actions/property-status"
+import { UrgentToggleControl } from "@/components/forms/urgent-toggle-control"
 import { RequestPropertyRemovalDialog } from "@/components/properties/request-property-removal-dialog"
 import {
   AlertDialog,
@@ -46,6 +48,7 @@ import { formatListingDate } from "@/lib/format-listing-date"
 import {
   getPropertyStatusBadgeClassName,
   URGENT_BADGE_CLASS,
+  URGENT_CARD_SURFACE_CLASS,
 } from "@/lib/ui/badge-styles"
 import { isCurrentlyUrgent } from "@/lib/urgent"
 import { cn } from "@/lib/utils"
@@ -163,8 +166,9 @@ export function PropertyCard({
       <Card
         className={cn(
           "overflow-hidden pt-0",
-          isUrgent && "border-t-4 border-t-destructive"
+          isUrgent && URGENT_CARD_SURFACE_CLASS
         )}
+        data-urgent={isUrgent ? "true" : undefined}
       >
         <div className="relative aspect-[16/10] w-full bg-muted">
           {thumbnail ? (
@@ -189,6 +193,7 @@ export function PropertyCard({
           <div className="absolute right-3 top-3 flex flex-wrap justify-end gap-2">
             {isUrgent ? (
               <Badge className={URGENT_BADGE_CLASS}>
+                <AlertTriangleIcon className="size-3" aria-hidden />
                 {tUrgent("badge")}
               </Badge>
             ) : null}
@@ -260,6 +265,12 @@ export function PropertyCard({
                 {t("edit")}
               </Link>
             </Button>
+            <UrgentToggleControl
+              entity="property"
+              entityId={property.id}
+              isUrgent={isUrgent}
+              disabled={isPending}
+            />
             <RequestPropertyRemovalDialog
               propertyId={property.id}
               disabled={isPending}

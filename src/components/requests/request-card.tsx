@@ -1,11 +1,12 @@
 "use client"
 
 import { useTransition } from "react"
-import { Loader2Icon, PhoneIcon, UserIcon } from "lucide-react"
+import { AlertTriangleIcon, Loader2Icon, PhoneIcon, UserIcon } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 
 import { manageRequest } from "@/actions/request"
+import { UrgentToggleControl } from "@/components/forms/urgent-toggle-control"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -17,7 +18,11 @@ import {
 } from "@/components/ui/card"
 import { usePropertyLabels } from "@/hooks/use-property-labels"
 import type { CompanyRequest } from "@/lib/data/requests"
-import { getExpiryBadgeClassName, URGENT_BADGE_CLASS } from "@/lib/ui/badge-styles"
+import {
+  getExpiryBadgeClassName,
+  URGENT_BADGE_CLASS,
+  URGENT_CARD_SURFACE_CLASS,
+} from "@/lib/ui/badge-styles"
 import { isCurrentlyUrgent } from "@/lib/urgent"
 import { cn } from "@/lib/utils"
 import type { ManageRequestAction } from "@/types/request"
@@ -92,8 +97,9 @@ export function RequestCard({
     <Card
       className={cn(
         "flex h-full flex-col",
-        isUrgent && "border-t-4 border-t-destructive"
+        isUrgent && URGENT_CARD_SURFACE_CLASS
       )}
+      data-urgent={isUrgent ? "true" : undefined}
     >
       <CardHeader className="gap-3">
         <div className="flex items-start justify-between gap-3">
@@ -107,6 +113,7 @@ export function RequestCard({
           <div className="flex flex-wrap justify-end gap-2">
             {isUrgent ? (
               <Badge className={URGENT_BADGE_CLASS}>
+                <AlertTriangleIcon className="size-3" aria-hidden />
                 {tUrgent("badge")}
               </Badge>
             ) : null}
@@ -149,6 +156,12 @@ export function RequestCard({
 
       {canManage ? (
         <CardFooter className="mt-auto flex flex-col gap-2 border-t bg-muted/20 sm:flex-row sm:flex-wrap">
+          <UrgentToggleControl
+            entity="request"
+            entityId={request.id}
+            isUrgent={isUrgent}
+            disabled={isPending}
+          />
           <Button
             type="button"
             variant="outline"

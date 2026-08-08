@@ -24,6 +24,8 @@ export async function notifyCompanyUsers(params: {
   /** When set, only these users (same company) receive the notification. */
   recipientUserIds?: string[]
   linkPath?: string | null
+  /** When true, skip inserting a row for the actor (matches push exclude). */
+  excludeActor?: boolean
 }): Promise<NotifyCompanyResult> {
   const {
     actorUserId,
@@ -32,6 +34,7 @@ export async function notifyCompanyUsers(params: {
     message,
     recipientUserIds,
     linkPath,
+    excludeActor = false,
   } = params
 
   try {
@@ -76,10 +79,19 @@ export async function notifyCompanyUsers(params: {
       userQuery = userQuery.in("id", recipientUserIds)
     }
 
+    if (excludeActor) {
+      userQuery = userQuery.neq("id", actorUserId)
+    }
+
     const { data: companyUsers, error: usersError } = await userQuery
 
     if (usersError || !companyUsers?.length) {
-      return null
+      console.log("[notify] dispatch skipped", {
+        companyId,
+        reason: usersError?.message ?? "no_recipients",
+        recipientFilter: recipientUserIds?.length ?? "company",
+      })
+      return { error: usersError?.message ?? "no_recipients" }
     }
 
     const rows = companyUsers.map((companyUser) => ({
@@ -95,16 +107,26 @@ export async function notifyCompanyUsers(params: {
       .insert(rows)
 
     if (insertError) {
-      console.error("[notify] insert failed", insertError.message)
-      return null
+      console.error("[notify] insert failed", {
+        companyId,
+        message: insertError.message,
+        recipientCount: rows.length,
+      })
+      return { error: insertError.message }
     }
+
+    console.log("[notify] dispatch ok", {
+      companyId,
+      recipientCount: rows.length,
+      hasLink: Boolean(linkPath),
+    })
 
     revalidatePath("/dashboard")
     return null
   } catch (error) {
     console.error("[notify] crashed", error)
     // Notifications must never block the primary business action.
-    return null
+    return { error: "notify_crashed" }
   }
 }
 

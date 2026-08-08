@@ -1,6 +1,6 @@
 "use client"
 
-import { Building2Icon, MapPinIcon, PhoneIcon, UserIcon } from "lucide-react"
+import { Building2Icon, MapPinIcon, PhoneIcon, UserIcon, AlertTriangleIcon } from "lucide-react"
 import { useLocale, useTranslations } from "next-intl"
 
 import { Badge } from "@/components/ui/badge"
@@ -12,7 +12,11 @@ import {
 } from "@/components/ui/card"
 import { usePropertyLabels } from "@/hooks/use-property-labels"
 import type { CompanyProperty } from "@/lib/data/properties"
-import { getPropertyStatusBadgeClassName, URGENT_BADGE_CLASS } from "@/lib/ui/badge-styles"
+import {
+  getPropertyStatusBadgeClassName,
+  URGENT_BADGE_CLASS,
+  URGENT_CARD_SURFACE_CLASS,
+} from "@/lib/ui/badge-styles"
 import { formatListingDate } from "@/lib/format-listing-date"
 import { isCurrentlyUrgent } from "@/lib/urgent"
 import { cn } from "@/lib/utils"
@@ -41,8 +45,9 @@ export function PublicPropertyCard({ property }: PublicPropertyCardProps) {
     <Card
       className={cn(
         "overflow-hidden pt-0",
-        isUrgent && "border-t-4 border-t-destructive"
+        isUrgent && URGENT_CARD_SURFACE_CLASS
       )}
+      data-urgent={isUrgent ? "true" : undefined}
     >
       <div className="relative aspect-[16/10] w-full bg-muted">
         {thumbnail ? (
@@ -67,6 +72,7 @@ export function PublicPropertyCard({ property }: PublicPropertyCardProps) {
         <div className="absolute right-3 top-3 flex flex-wrap justify-end gap-2">
           {isUrgent ? (
             <Badge className={URGENT_BADGE_CLASS}>
+              <AlertTriangleIcon className="size-3" aria-hidden />
               {tUrgent("badge")}
             </Badge>
           ) : null}

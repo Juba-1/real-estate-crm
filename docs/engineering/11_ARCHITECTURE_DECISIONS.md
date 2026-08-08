@@ -280,3 +280,13 @@ Record of important decisions **already present** in the codebase and why they e
 **Why:** Employees must never permanently remove inventory alone; managers need a simple office workflow without soft-delete redesign.
 
 **Consequence:** See `docs/engineering/18_PROPERTY_REMOVAL.md`. Historical KPIs preserved (archived rows + request audit after approve via `ON DELETE SET NULL`).
+
+---
+
+## ADR-028 — Urgent anytime + push reliability (Release 6B)
+
+**Decision:** Keep `urgent_until` semantics. Add admin-aware `activate_urgent_*` RPCs (transfer the listing owner’s one-urgent slot). Expose card toggles via authz’d `setPropertyUrgent` / `setRequestUrgent`. Harden existing Web Push: locale-prefixed push URLs, SW path allowlist, actor/company bind before push fan-out, gated opportunity receipts, non-blocking post-save notify. Do not replace the push provider or redesign Opportunity.
+
+**Why:** Urgent felt create-only due to missing UI + silent admin RPC no-ops; push failures were silent/locale-broken.
+
+**Consequence:** See `docs/engineering/19_URGENT_AND_PUSH_RELIABILITY.md`. Live OS push still requires device + Vercel VAPID verification.

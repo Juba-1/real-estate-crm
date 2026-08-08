@@ -20,10 +20,19 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useRouter } from "@/i18n/navigation"
+import { isSafeInternalPath } from "@/lib/notifications/localize-path"
 import { cn } from "@/lib/utils"
 import type { NotificationRow } from "@/types/notification"
 
 const POLL_INTERVAL_MS = 60_000
+
+function toRouterPath(linkPath: string): string {
+  const match = linkPath.match(/^\/(ar|en)(\/.*)?$/)
+  if (match) {
+    return match[2] && match[2].length > 0 ? match[2] : "/"
+  }
+  return linkPath
+}
 
 function formatNotificationTime(
   createdAt: string,
@@ -103,9 +112,9 @@ export function NotificationsDropdown() {
         )
       }
 
-      if (notification.link_path) {
+      if (notification.link_path && isSafeInternalPath(notification.link_path)) {
         setOpen(false)
-        router.push(notification.link_path)
+        router.push(toRouterPath(notification.link_path))
       }
     })
   }
