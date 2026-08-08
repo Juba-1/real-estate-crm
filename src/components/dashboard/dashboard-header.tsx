@@ -1,5 +1,6 @@
 "use client"
 
+import dynamic from "next/dynamic"
 import { useState } from "react"
 import { MenuIcon } from "lucide-react"
 import { useTranslations } from "next-intl"
@@ -8,8 +9,6 @@ import { logout } from "@/actions/auth"
 import { DashboardBrand } from "@/components/dashboard/dashboard-brand"
 import { SidebarNav } from "@/components/dashboard/sidebar-nav"
 import { LanguageSwitcher } from "@/components/language-switcher"
-import { NotificationsDropdown } from "@/components/notifications-dropdown"
-import { PushNotificationManager } from "@/components/push-notification-manager"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -28,9 +27,29 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet"
+import { Skeleton } from "@/components/ui/skeleton"
 import { getUserInitials } from "@/lib/user-utils"
 import type { CurrentUserProfile } from "@/types/user"
 import type { UserRole } from "@/types/user"
+
+const NotificationsDropdown = dynamic(
+  () =>
+    import("@/components/notifications-dropdown").then(
+      (mod) => mod.NotificationsDropdown
+    ),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="size-9 rounded-md" />,
+  }
+)
+
+const PushNotificationManager = dynamic(
+  () =>
+    import("@/components/push-notification-manager").then(
+      (mod) => mod.PushNotificationManager
+    ),
+  { ssr: false }
+)
 
 type DashboardHeaderProps = {
   user: CurrentUserProfile

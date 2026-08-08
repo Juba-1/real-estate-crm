@@ -19,10 +19,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { useRouter } from "@/i18n/navigation"
 import { cn } from "@/lib/utils"
 import type { NotificationRow } from "@/types/notification"
 
-const POLL_INTERVAL_MS = 30_000
+const POLL_INTERVAL_MS = 60_000
 
 function formatNotificationTime(
   createdAt: string,
@@ -36,6 +37,7 @@ function formatNotificationTime(
 
 export function NotificationsDropdown() {
   const locale = useLocale()
+  const router = useRouter()
   const t = useTranslations("notifications")
   const [open, setOpen] = useState(false)
   const [notifications, setNotifications] = useState<NotificationRow[]>([])
@@ -85,23 +87,26 @@ export function NotificationsDropdown() {
   }
 
   function handleNotificationClick(notification: NotificationRow) {
-    if (notification.is_read) {
-      return
-    }
-
     startTransition(async () => {
-      const result = await markNotificationAsRead(notification.id)
+      if (!notification.is_read) {
+        const result = await markNotificationAsRead(notification.id)
 
-      if (result?.error) {
-        toast.error(result.error)
-        return
+        if (result?.error) {
+          toast.error(result.error)
+          return
+        }
+
+        setNotifications((current) =>
+          current.map((item) =>
+            item.id === notification.id ? { ...item, is_read: true } : item
+          )
+        )
       }
 
-      setNotifications((current) =>
-        current.map((item) =>
-          item.id === notification.id ? { ...item, is_read: true } : item
-        )
-      )
+      if (notification.link_path) {
+        setOpen(false)
+        router.push(notification.link_path)
+      }
     })
   }
 
@@ -112,7 +117,11 @@ export function NotificationsDropdown() {
           variant="outline"
           size="icon"
           className="relative size-9"
-          aria-label={t("title")}
+          aria-label={
+            unreadCount > 0
+              ? `${t("title")} (${unreadCount})`
+              : t("title")
+          }
         >
           <BellIcon className="size-4" />
           {unreadCount > 0 ? (
@@ -148,9 +157,10 @@ export function NotificationsDropdown() {
         <DropdownMenuSeparator />
 
         {notifications.length === 0 ? (
-          <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-            {t("empty")}
-          </p>
+          <div className="space-y-1 px-3 py-6 text-center">
+            <p className="text-sm text-muted-foreground">{t("empty")}</p>
+            <p className="text-xs text-muted-foreground/80">{t("emptyHint")}</p>
+          </div>
         ) : (
           <div className="max-h-80 overflow-y-auto">
             {notifications.map((notification) => (

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 
+import { assertCanManageProperty } from "@/lib/authz/tenant"
 import { createClient } from "@/lib/supabase/server"
 import { extractPropertyMediaPaths } from "@/lib/supabase/storage"
 import type { PropertyStatus } from "@/types/property"
@@ -26,6 +27,37 @@ export async function updatePropertyStatus(
     return { error: "You must be signed in to update property status." }
   }
 
+  const { data: profile, error: profileError } = await supabase
+    .from("users")
+    .select("company_id, role")
+    .eq("id", user.id)
+    .maybeSingle()
+
+  if (profileError || !profile?.company_id || !profile.role) {
+    return {
+      error:
+        "Your user profile is not set up yet. Contact your office admin.",
+    }
+  }
+
+  const access = await assertCanManageProperty(
+    supabase,
+    user.id,
+    profile,
+    propertyId
+  )
+  if ("error" in access) {
+    return access
+  }
+
+  // Archive is manager-only via decidePropertyRemoval ("Archive instead").
+  if (newStatus === "archived") {
+    return {
+      error:
+        "Archiving requires manager approval. Use a removal request or Pending Removals.",
+    }
+  }
+
   if (deleteImages && currentImageUrls.length > 0) {
     const storagePaths = extractPropertyMediaPaths(currentImageUrls)
 
@@ -47,7 +79,7 @@ export async function updatePropertyStatus(
         status_updated_at: new Date().toISOString(),
       })
       .eq("id", propertyId)
-      .eq("agent_id", user.id)
+      .eq("company_id", profile.company_id)
 
     if (updateError) {
       return { error: updateError.message }
@@ -57,7 +89,7 @@ export async function updatePropertyStatus(
       .from("properties")
       .update({ status: newStatus })
       .eq("id", propertyId)
-      .eq("agent_id", user.id)
+      .eq("company_id", profile.company_id)
 
     if (updateError) {
       return { error: updateError.message }

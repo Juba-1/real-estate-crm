@@ -20,13 +20,33 @@ export async function generateMetadata({
   params,
 }: {
   params: Promise<{ locale: string }>
-}) {
+}): Promise<Metadata> {
   const { locale } = await params
   const t = await getTranslations({ locale, namespace: "common" })
 
   return {
-    title: t("appName"),
+    title: {
+      default: t("appName"),
+      template: `%s · ${t("appName")}`,
+    },
     description: t("appDescription"),
+    applicationName: "DEERAH",
+    manifest: "/manifest.webmanifest",
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: "default",
+      title: "DEERAH",
+    },
+    icons: {
+      icon: [
+        { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+        { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+      ],
+      apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180" }],
+    },
+    other: {
+      "mobile-web-app-capable": "yes",
+    },
   }
 }
 

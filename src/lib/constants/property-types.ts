@@ -139,3 +139,14 @@ export function shouldShowBuildingFields(type: string | undefined | null): boole
 export function shouldShowAnnexField(type: string | undefined | null): boolean {
   return isVillaType(type)
 }
+
+export function isApartmentType(type: string | undefined | null): boolean {
+  const normalized = normalizePropertyType(type)
+  return normalized === "apartment" || normalized === "duplex_apartment"
+}
+
+export function shouldShowApartmentIdentityFields(
+  type: string | undefined | null
+): boolean {
+  return isApartmentType(type)
+}

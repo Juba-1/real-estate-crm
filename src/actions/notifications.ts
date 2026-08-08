@@ -1,8 +1,5 @@
 "use server"
 
-import { revalidatePath } from "next/cache"
-
-import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
 import type { NotificationRow } from "@/types/notification"
 
@@ -12,7 +9,8 @@ export type GetUserNotificationsResult =
   | { error: string }
   | { notifications: NotificationRow[] }
 
-const NOTIFICATION_SELECT = "id, title, message, is_read, created_at" as const
+const NOTIFICATION_SELECT =
+  "id, title, message, is_read, created_at, link_path" as const
 const NOTIFICATION_LIMIT = 30
 
 async function requireAuthenticatedUserId(): Promise<
@@ -71,7 +69,7 @@ export async function markNotificationAsRead(
     return { error: error.message }
   }
 
-  revalidatePath("/dashboard")
+  // Client dropdown updates local state — avoid full /dashboard RSC refresh.
   return null
 }
 
@@ -92,44 +90,9 @@ export async function markAllAsRead(): Promise<NotificationActionResult> {
     return { error: error.message }
   }
 
-  revalidatePath("/dashboard")
+  // Client dropdown updates local state — avoid full /dashboard RSC refresh.
   return null
 }
 
-export async function createCompanyNotification(
-  companyId: string,
-  title: string,
-  message: string
-): Promise<void> {
-  try {
-    const adminClient = createAdminClient()
-
-    const { data: companyUsers, error: usersError } = await adminClient
-      .from("users")
-      .select("id")
-      .eq("company_id", companyId)
-
-    if (usersError || !companyUsers?.length) {
-      return
-    }
-
-    const rows = companyUsers.map((companyUser) => ({
-      company_id: companyId,
-      user_id: companyUser.id,
-      title,
-      message,
-    }))
-
-    const { error: insertError } = await adminClient
-      .from("notifications")
-      .insert(rows)
-
-    if (insertError) {
-      return
-    }
-
-    revalidatePath("/dashboard")
-  } catch {
-    // Notifications must never block the primary business action.
-  }
-}
+// createCompanyNotification removed from this Server Actions module.
+// Use `@/lib/notifications/notify-company` from trusted server code only.

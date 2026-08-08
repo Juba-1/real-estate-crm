@@ -62,9 +62,10 @@ export default async function SuperAdminCompaniesPage() {
               <TableRow>
                 <TableCell
                   colSpan={5}
-                  className="h-24 text-center text-muted-foreground"
+                  className="h-28 space-y-1 py-8 text-center text-muted-foreground"
                 >
-                  {t("emptyCompanies")}
+                  <p>{t("emptyCompanies")}</p>
+                  <p className="text-sm">{t("emptyCompaniesHint")}</p>
                 </TableCell>
               </TableRow>
             ) : (

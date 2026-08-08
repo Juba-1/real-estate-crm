@@ -13,8 +13,10 @@ export default async function DashboardLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  const user = await getCurrentUser()
-  const t = await getTranslations("common")
+  const [user, t] = await Promise.all([
+    getCurrentUser(),
+    getTranslations("common"),
+  ])
 
   if (!user) {
     return redirectTo("/login")
@@ -24,9 +26,8 @@ export default async function DashboardLayout({
     return redirectTo("/super-admin")
   }
 
-  const currentUser = user
-  const company = currentUser.company_id
-    ? await getCompanyBranding(currentUser.company_id)
+  const company = user.company_id
+    ? await getCompanyBranding(user.company_id)
     : null
   const brandName = company?.name ?? t("appName")
 
@@ -37,14 +38,14 @@ export default async function DashboardLayout({
           <DashboardBrand name={brandName} logoUrl={company?.logo_url} />
         </div>
         <div className="flex flex-1 flex-col p-4">
-          <SidebarNav userRole={currentUser.role} />
+          <SidebarNav userRole={user.role} />
         </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col print:block">
         <div className="print:hidden">
           <DashboardHeader
-            user={currentUser}
+            user={user}
             brandName={brandName}
             brandLogoUrl={company?.logo_url}
           />

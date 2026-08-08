@@ -3,14 +3,27 @@ import { getTranslations } from "next-intl/server"
 
 import { AddRequestDialog } from "@/components/requests/add-request-dialog"
 import { RequestCard } from "@/components/requests/request-card"
+import { EmptyState } from "@/components/ui/empty-state"
+import { ListPagination } from "@/components/ui/list-pagination"
+import { getApprovedDictionaryValues } from "@/lib/data/dictionary"
 import { getCompanyRequests } from "@/lib/data/requests"
 import { getCurrentUser } from "@/lib/data/user"
+import { getCityOptions } from "@/lib/dictionary-catalog"
 
-export default async function RequestsPage() {
-  const [requests, currentUser] = await Promise.all([
-    getCompanyRequests(),
-    getCurrentUser(),
-  ])
+type RequestsPageProps = {
+  searchParams: Promise<{ page?: string | string[] }>
+}
+
+export default async function RequestsPage({ searchParams }: RequestsPageProps) {
+  const params = await searchParams
+  const [result, currentUser, cityOptions, approvedPropertyTypes] =
+    await Promise.all([
+      getCompanyRequests(params),
+      getCurrentUser(),
+      getCityOptions(),
+      getApprovedDictionaryValues("property_type"),
+    ])
+  const { items: requests, page, hasMore, total } = result
   const t = await getTranslations("requests")
 
   return (
@@ -22,28 +35,43 @@ export default async function RequestsPage() {
           </h1>
           <p className="text-sm text-muted-foreground">{t("description")}</p>
         </div>
-        <AddRequestDialog />
+        <AddRequestDialog
+          cityOptions={cityOptions}
+          approvedPropertyTypes={approvedPropertyTypes}
+        />
       </div>
 
       {requests.length === 0 ? (
-        <div className="flex min-h-64 flex-col items-center justify-center rounded-xl border border-dashed bg-muted/20 px-6 py-12 text-center">
-          <ClipboardListIcon className="mb-3 size-10 text-muted-foreground" />
-          <h2 className="font-heading text-lg font-medium">{t("emptyTitle")}</h2>
-          <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-            {t("emptyDescription")}
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {requests.map((request) => (
-            <RequestCard
-              key={request.id}
-              request={request}
-              currentUserId={currentUser?.id ?? ""}
-              currentUserRole={currentUser?.role ?? null}
+        <EmptyState
+          icon={<ClipboardListIcon className="size-10" />}
+          title={t("emptyTitle")}
+          description={t("emptyDescription")}
+          action={
+            <AddRequestDialog
+              cityOptions={cityOptions}
+              approvedPropertyTypes={approvedPropertyTypes}
             />
-          ))}
-        </div>
+          }
+        />
+      ) : (
+        <>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {requests.map((request) => (
+              <RequestCard
+                key={request.id}
+                request={request}
+                currentUserId={currentUser?.id ?? ""}
+                currentUserRole={currentUser?.role ?? null}
+              />
+            ))}
+          </div>
+          <ListPagination
+            page={page}
+            hasMore={hasMore}
+            total={total}
+            searchParams={params}
+          />
+        </>
       )}
     </div>
   )

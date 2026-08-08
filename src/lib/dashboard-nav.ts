@@ -7,6 +7,7 @@ import {
   Search,
   SettingsIcon,
   ShieldIcon,
+  Trash2,
   type LucideIcon,
 } from "lucide-react"
 
@@ -18,6 +19,7 @@ export type DashboardNavItemKey =
   | "addProperty"
   | "search"
   | "internalRequests"
+  | "pendingRemovals"
   | "adminPanel"
   | "reports"
   | "companySettings"
@@ -63,6 +65,11 @@ export function getDashboardNavItems(
   const items: DashboardNavItem[] = [homeNavItem, ...baseDashboardNavItems]
 
   if (role === "admin") {
+    items.push({
+      titleKey: "pendingRemovals",
+      href: "/dashboard/removals",
+      icon: Trash2,
+    })
     items.push({
       titleKey: "reports",
       href: "/dashboard/reports",

@@ -3,13 +3,32 @@ import { getTranslations } from "next-intl/server"
 
 import { PropertyCard } from "@/components/properties/property-card"
 import { Button } from "@/components/ui/button"
+import { EmptyState } from "@/components/ui/empty-state"
+import { ListPagination } from "@/components/ui/list-pagination"
 import { Link } from "@/i18n/navigation"
 import { getMyProperties } from "@/lib/data/properties"
+import { getPendingRemovalPropertyIdsForAgent } from "@/lib/data/property-removals"
+import { getCurrentUser } from "@/lib/data/user"
 
-export default async function MyPropertiesPage() {
-  const properties = await getMyProperties()
-  const t = await getTranslations("myProperties")
-  const tNav = await getTranslations("nav")
+type MyPropertiesPageProps = {
+  searchParams: Promise<{ page?: string | string[] }>
+}
+
+export default async function MyPropertiesPage({
+  searchParams,
+}: MyPropertiesPageProps) {
+  const params = await searchParams
+  const [result, currentUser, t, tNav] = await Promise.all([
+    getMyProperties(params),
+    getCurrentUser(),
+    getTranslations("myProperties"),
+    getTranslations("nav"),
+  ])
+  const { items: properties, page, hasMore, total } = result
+  const pendingIds = currentUser
+    ? await getPendingRemovalPropertyIdsForAgent(currentUser.id)
+    : new Set<string>()
+  const isAdmin = currentUser?.role === "admin"
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
@@ -29,22 +48,35 @@ export default async function MyPropertiesPage() {
       </div>
 
       {properties.length === 0 ? (
-        <div className="flex min-h-64 flex-col items-center justify-center rounded-xl border border-dashed bg-muted/20 px-6 py-12 text-center">
-          <Building2Icon className="mb-3 size-10 text-muted-foreground" />
-          <h2 className="font-heading text-lg font-medium">{t("emptyTitle")}</h2>
-          <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-            {t("emptyDescription")}
-          </p>
-          <Button asChild className="mt-4">
-            <Link href="/dashboard/add">{t("emptyAction")}</Link>
-          </Button>
-        </div>
+        <EmptyState
+          icon={<Building2Icon className="size-10" />}
+          title={t("emptyTitle")}
+          description={t("emptyDescription")}
+          action={
+            <Button asChild>
+              <Link href="/dashboard/add">{t("emptyAction")}</Link>
+            </Button>
+          }
+        />
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {properties.map((property) => (
-            <PropertyCard key={property.id} property={property} />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {properties.map((property) => (
+              <PropertyCard
+                key={property.id}
+                property={property}
+                isAdmin={isAdmin}
+                removalPending={pendingIds.has(property.id)}
+              />
+            ))}
+          </div>
+          <ListPagination
+            page={page}
+            hasMore={hasMore}
+            total={total}
+            searchParams={params}
+          />
+        </>
       )}
     </div>
   )

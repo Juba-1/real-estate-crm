@@ -2,9 +2,12 @@ import createIntlMiddleware from "next-intl/middleware"
 import { type NextRequest, NextResponse } from "next/server"
 
 import { routing } from "@/i18n/routing"
-import { isCompanyActiveForUser } from "@/lib/auth/company-access"
+import {
+  isGateCompanyActive,
+  loadMiddlewareGateProfile,
+  postLoginPathForRole,
+} from "@/lib/auth/middleware-gate"
 import { updateSession } from "@/lib/supabase/middleware"
-import { createServerClient } from "@supabase/ssr"
 
 const handleI18nRouting = createIntlMiddleware(routing)
 
@@ -34,105 +37,23 @@ function localizedPath(locale: string, pathname: string) {
   return `/${locale}${normalized === "/" ? "" : normalized}`
 }
 
-async function getPostLoginPath(
+function redirectWithCookies(
   request: NextRequest,
   response: NextResponse,
-  userId: string
+  pathname: string,
+  searchParams?: Record<string, string>
 ) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseKey =
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-  if (!supabaseUrl || !supabaseKey) {
-    return "/dashboard"
-  }
-
-  const supabase = createServerClient(supabaseUrl, supabaseKey, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll()
-      },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value }) => {
-          request.cookies.set(name, value)
-        })
-
-        cookiesToSet.forEach(({ name, value, options }) => {
-          response.cookies.set(name, value, options)
-        })
-      },
-    },
-  })
-
-  const { data: profile } = await supabase
-    .from("users")
-    .select("role")
-    .eq("id", userId)
-    .maybeSingle()
-
-  return profile?.role === "super_admin" ? "/super-admin" : "/dashboard"
-}
-
-async function enforceActiveCompanyAccess(
-  request: NextRequest,
-  response: NextResponse,
-  userId: string,
-  locale: string
-): Promise<NextResponse | null> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseKey =
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-  if (!supabaseUrl || !supabaseKey) {
-    return null
-  }
-
-  const supabase = createServerClient(supabaseUrl, supabaseKey, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll()
-      },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value }) => {
-          request.cookies.set(name, value)
-        })
-
-        cookiesToSet.forEach(({ name, value, options }) => {
-          response.cookies.set(name, value, options)
-        })
-      },
-    },
-  })
-
-  const { data: profile } = await supabase
-    .from("users")
-    .select("role, company_id")
-    .eq("id", userId)
-    .maybeSingle()
-
-  if (!profile) {
-    return null
-  }
-
-  const isActive = await isCompanyActiveForUser(supabase, profile)
-
-  if (isActive) {
-    return null
-  }
-
-  await supabase.auth.signOut()
-
   const url = request.nextUrl.clone()
-  url.pathname = localizedPath(locale, "/login")
-  url.searchParams.set("error", "inactive_company")
-
+  url.pathname = pathname
+  if (searchParams) {
+    for (const [key, value] of Object.entries(searchParams)) {
+      url.searchParams.set(key, value)
+    }
+  }
   const redirectResponse = NextResponse.redirect(url)
   response.cookies.getAll().forEach((cookie) => {
     redirectResponse.cookies.set(cookie)
   })
-
   return redirectResponse
 }
 
@@ -163,72 +84,70 @@ export async function middleware(request: NextRequest) {
   const isLoginRoute = pathnameWithoutLocale === "/login"
 
   if (!user && isProtectedRoute) {
-    const url = request.nextUrl.clone()
-    url.pathname = localizedPath(locale, "/login")
-    const redirectResponse = NextResponse.redirect(url)
-    response.cookies.getAll().forEach((cookie) => {
-      redirectResponse.cookies.set(cookie)
-    })
-    return redirectResponse
-  }
-
-  if (user && isLoginRoute) {
-    const inactiveRedirect = await enforceActiveCompanyAccess(
+    return redirectWithCookies(
       request,
       response,
-      user.id,
-      locale
+      localizedPath(locale, "/login")
     )
-
-    if (inactiveRedirect) {
-      return inactiveRedirect
-    }
-
-    const postLoginPath = await getPostLoginPath(request, response, user.id)
-    const url = request.nextUrl.clone()
-    url.pathname = localizedPath(locale, postLoginPath)
-    const redirectResponse = NextResponse.redirect(url)
-    response.cookies.getAll().forEach((cookie) => {
-      redirectResponse.cookies.set(cookie)
-    })
-    return redirectResponse
   }
 
-  if (user && pathnameWithoutLocale.startsWith("/super-admin")) {
-    const postLoginPath = await getPostLoginPath(request, response, user.id)
-    if (postLoginPath !== "/super-admin") {
-      const url = request.nextUrl.clone()
-      url.pathname = localizedPath(locale, "/dashboard")
-      const redirectResponse = NextResponse.redirect(url)
-      response.cookies.getAll().forEach((cookie) => {
-        redirectResponse.cookies.set(cookie)
-      })
-      return redirectResponse
-    }
+  const needsGate =
+    Boolean(user) &&
+    (isLoginRoute ||
+      pathnameWithoutLocale.startsWith("/dashboard") ||
+      pathnameWithoutLocale.startsWith("/super-admin"))
+
+  if (!user || !needsGate) {
+    return response
   }
 
-  if (user && pathnameWithoutLocale.startsWith("/dashboard")) {
-    const inactiveRedirect = await enforceActiveCompanyAccess(
+  const gate = await loadMiddlewareGateProfile(request, response, user.id)
+  if (!gate?.profile) {
+    return response
+  }
+
+  const { supabase, profile } = gate
+
+  if (!isGateCompanyActive(profile)) {
+    await supabase.auth.signOut()
+    return redirectWithCookies(
       request,
       response,
-      user.id,
-      locale
+      localizedPath(locale, "/login"),
+      { error: "inactive_company" }
     )
+  }
 
-    if (inactiveRedirect) {
-      return inactiveRedirect
-    }
+  const postLoginPath = postLoginPathForRole(profile.role)
 
-    const postLoginPath = await getPostLoginPath(request, response, user.id)
-    if (postLoginPath === "/super-admin") {
-      const url = request.nextUrl.clone()
-      url.pathname = localizedPath(locale, "/super-admin")
-      const redirectResponse = NextResponse.redirect(url)
-      response.cookies.getAll().forEach((cookie) => {
-        redirectResponse.cookies.set(cookie)
-      })
-      return redirectResponse
-    }
+  if (isLoginRoute) {
+    return redirectWithCookies(
+      request,
+      response,
+      localizedPath(locale, postLoginPath)
+    )
+  }
+
+  if (
+    pathnameWithoutLocale.startsWith("/super-admin") &&
+    postLoginPath !== "/super-admin"
+  ) {
+    return redirectWithCookies(
+      request,
+      response,
+      localizedPath(locale, "/dashboard")
+    )
+  }
+
+  if (
+    pathnameWithoutLocale.startsWith("/dashboard") &&
+    postLoginPath === "/super-admin"
+  ) {
+    return redirectWithCookies(
+      request,
+      response,
+      localizedPath(locale, "/super-admin")
+    )
   }
 
   return response

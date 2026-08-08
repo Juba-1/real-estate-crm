@@ -4,10 +4,17 @@ import { getTranslations } from "next-intl/server"
 
 import { PublicPropertyCard } from "@/components/properties/public-property-card"
 import { SearchFilters } from "@/components/properties/search-filters"
+import { Button } from "@/components/ui/button"
+import { EmptyState } from "@/components/ui/empty-state"
+import { ListPagination } from "@/components/ui/list-pagination"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Link } from "@/i18n/navigation"
+import { getApprovedDictionaryValues } from "@/lib/data/dictionary"
 import {
   getCompanyProperties,
   type CompanyPropertySearchParams,
 } from "@/lib/data/properties"
+import { getCityOptions } from "@/lib/dictionary-catalog"
 
 type SearchPageProps = {
   searchParams: Promise<CompanyPropertySearchParams>
@@ -15,8 +22,14 @@ type SearchPageProps = {
 
 export default async function SearchPage({ searchParams }: SearchPageProps) {
   const params = await searchParams
-  const properties = await getCompanyProperties(params)
-  const t = await getTranslations("search")
+  const [result, t, cityOptions, approvedPropertyTypes] = await Promise.all([
+    getCompanyProperties(params),
+    getTranslations("search"),
+    getCityOptions(),
+    getApprovedDictionaryValues("property_type"),
+  ])
+
+  const { items: properties, page, hasMore, total } = result
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
@@ -27,28 +40,38 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         <p className="text-sm text-muted-foreground">{t("description")}</p>
       </div>
 
-      <Suspense
-        fallback={
-          <div className="h-24 animate-pulse rounded-xl border bg-muted/40" />
-        }
-      >
-        <SearchFilters />
+      <Suspense fallback={<Skeleton className="h-24 w-full rounded-xl" />}>
+        <SearchFilters
+          cityOptions={cityOptions}
+          approvedPropertyTypes={approvedPropertyTypes}
+        />
       </Suspense>
 
       {properties.length === 0 ? (
-        <div className="flex min-h-64 flex-col items-center justify-center rounded-xl border border-dashed bg-muted/20 px-6 py-12 text-center">
-          <SearchIcon className="mb-3 size-10 text-muted-foreground" />
-          <h2 className="font-heading text-lg font-medium">{t("emptyTitle")}</h2>
-          <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-            {t("emptyDescription")}
-          </p>
-        </div>
+        <EmptyState
+          icon={<SearchIcon className="size-10" />}
+          title={t("emptyTitle")}
+          description={t("emptyDescription")}
+          action={
+            <Button asChild>
+              <Link href="/dashboard/add">{t("emptyAction")}</Link>
+            </Button>
+          }
+        />
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {properties.map((property) => (
-            <PublicPropertyCard key={property.id} property={property} />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {properties.map((property) => (
+              <PublicPropertyCard key={property.id} property={property} />
+            ))}
+          </div>
+          <ListPagination
+            page={page}
+            hasMore={hasMore}
+            total={total}
+            searchParams={params}
+          />
+        </>
       )}
     </div>
   )

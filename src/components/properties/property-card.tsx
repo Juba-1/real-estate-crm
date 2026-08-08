@@ -1,13 +1,20 @@
 "use client"
 
 import { useEffect, useState, useTransition } from "react"
-import { Building2Icon, Loader2Icon, PencilIcon, Trash2Icon } from "lucide-react"
-import { useTranslations } from "next-intl"
+import {
+  Building2Icon,
+  Loader2Icon,
+  MapPinIcon,
+  PencilIcon,
+  Trash2Icon,
+} from "lucide-react"
+import { useLocale, useTranslations } from "next-intl"
 import { useRouter } from "@/i18n/navigation"
 import { toast } from "sonner"
 
 import { deleteProperty } from "@/actions/property"
 import { updatePropertyStatus } from "@/actions/property-status"
+import { RequestPropertyRemovalDialog } from "@/components/properties/request-property-removal-dialog"
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -35,6 +42,12 @@ import {
 import { usePropertyLabels } from "@/hooks/use-property-labels"
 import { Link } from "@/i18n/navigation"
 import type { MyProperty } from "@/lib/data/properties"
+import { formatListingDate } from "@/lib/format-listing-date"
+import {
+  getPropertyStatusBadgeClassName,
+  URGENT_BADGE_CLASS,
+} from "@/lib/ui/badge-styles"
+import { isCurrentlyUrgent } from "@/lib/urgent"
 import { cn } from "@/lib/utils"
 import type { PropertyStatus } from "@/types/property"
 
@@ -45,35 +58,31 @@ const STATUS_OPTIONS: PropertyStatus[] = [
   "rented",
 ]
 
-function getStatusBadgeClassName(status: PropertyStatus) {
-  switch (status) {
-    case "available":
-      return "border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
-    case "pending":
-      return "border-amber-500/30 bg-amber-500/15 text-amber-700 dark:text-amber-300"
-    case "sold":
-      return "border-destructive/30 bg-destructive/15 text-destructive"
-    case "rented":
-      return "border-sky-500/30 bg-sky-500/15 text-sky-700 dark:text-sky-300"
-    default:
-      return ""
-  }
-}
-
 type PropertyCardProps = {
   property: MyProperty
+  /** When true, show admin hard-delete override. Agents only request removal. */
+  isAdmin?: boolean
+  removalPending?: boolean
 }
 
-export function PropertyCard({ property }: PropertyCardProps) {
+export function PropertyCard({
+  property,
+  isAdmin = false,
+  removalPending = false,
+}: PropertyCardProps) {
   const [soldDialogOpen, setSoldDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [selectedStatus, setSelectedStatus] = useState(property.status)
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
+  const locale = useLocale()
   const { propertyType, offerType, status, formatPrice } = usePropertyLabels()
   const t = useTranslations("properties")
   const tStatus = useTranslations("status")
   const tSold = useTranslations("soldDialog")
+  const tUrgent = useTranslations("urgent")
+  const listingDate = formatListingDate(property.created_at, locale)
+  const isUrgent = isCurrentlyUrgent(property.urgent_until)
 
   useEffect(() => {
     setSelectedStatus(property.status)
@@ -151,7 +160,12 @@ export function PropertyCard({ property }: PropertyCardProps) {
 
   return (
     <>
-      <Card className="overflow-hidden pt-0">
+      <Card
+        className={cn(
+          "overflow-hidden pt-0",
+          isUrgent && "border-t-4 border-t-destructive"
+        )}
+      >
         <div className="relative aspect-[16/10] w-full bg-muted">
           {thumbnail ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -166,8 +180,19 @@ export function PropertyCard({ property }: PropertyCardProps) {
             </div>
           )}
 
-          <div className="absolute start-3 top-3 flex flex-wrap gap-2">
-            <Badge className={cn(getStatusBadgeClassName(property.status))}>
+          <div className="absolute left-3 top-3 z-10">
+            <span className="rounded-md bg-background/85 px-2 py-1 text-[11px] font-medium text-foreground/80 shadow-sm backdrop-blur-sm">
+              {listingDate}
+            </span>
+          </div>
+
+          <div className="absolute right-3 top-3 flex flex-wrap justify-end gap-2">
+            {isUrgent ? (
+              <Badge className={URGENT_BADGE_CLASS}>
+                {tUrgent("badge")}
+              </Badge>
+            ) : null}
+            <Badge className={cn(getPropertyStatusBadgeClassName(property.status))}>
               {status(property.status)}
             </Badge>
             <Badge variant="secondary">
@@ -186,7 +211,9 @@ export function PropertyCard({ property }: PropertyCardProps) {
                 {property.city}, {property.neighborhood}
               </p>
             </div>
-            <Badge variant="outline">{propertyType(property.type)}</Badge>
+            <Badge variant="outline">
+              {propertyType(property.type, property.custom_property_type)}
+            </Badge>
           </div>
         </CardHeader>
 
@@ -215,23 +242,42 @@ export function PropertyCard({ property }: PropertyCardProps) {
 
         <CardFooter className="flex-col gap-3 border-t bg-muted/20">
           <div className="flex w-full flex-wrap gap-2">
+            {property.google_maps_url ? (
+              <Button asChild variant="secondary" size="sm" className="gap-2">
+                <a
+                  href={property.google_maps_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <MapPinIcon className="size-4" />
+                  {t("viewLocation")}
+                </a>
+              </Button>
+            ) : null}
             <Button asChild variant="outline" size="sm" className="gap-2">
               <Link href={`/dashboard/properties/${property.id}/edit`}>
                 <PencilIcon className="size-4" />
                 {t("edit")}
               </Link>
             </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              className="gap-2"
+            <RequestPropertyRemovalDialog
+              propertyId={property.id}
               disabled={isPending}
-              onClick={() => setDeleteDialogOpen(true)}
-            >
-              <Trash2Icon className="size-4" />
-              {t("delete")}
-            </Button>
+              alreadyPending={removalPending}
+            />
+            {isAdmin ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-2 text-destructive"
+                disabled={isPending}
+                onClick={() => setDeleteDialogOpen(true)}
+              >
+                <Trash2Icon className="size-4" />
+                {t("delete")}
+              </Button>
+            ) : null}
           </div>
 
           <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

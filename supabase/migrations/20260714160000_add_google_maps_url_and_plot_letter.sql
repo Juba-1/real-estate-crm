@@ -1,0 +1,7 @@
+BEGIN;
+
+ALTER TABLE properties
+  ADD COLUMN IF NOT EXISTS google_maps_url TEXT,
+  ADD COLUMN IF NOT EXISTS plot_letter TEXT;
+
+COMMIT;

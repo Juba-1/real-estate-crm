@@ -4,4 +4,5 @@ export type NotificationRow = {
   message: string
   is_read: boolean
   created_at: string
+  link_path: string | null
 }

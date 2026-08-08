@@ -1,5 +1,6 @@
 import { normalizePropertyType } from "@/lib/constants/property-types"
 import type { EditableProperty } from "@/lib/data/properties"
+import { isCurrentlyUrgent } from "@/lib/urgent"
 import type { InsertPropertyFormValues, PropertyType } from "@/types/property"
 
 export function editablePropertyToFormValues(
@@ -26,6 +27,9 @@ export function editablePropertyToFormValues(
         typeof specs.plan_number === "string" ? specs.plan_number : "",
       plot_number:
         typeof specs.plot_number === "string" ? specs.plot_number : "",
+      floor: typeof specs.floor === "number" ? specs.floor : undefined,
+      project_name:
+        typeof specs.project_name === "string" ? specs.project_name : "",
       notes: typeof specs.notes === "string" ? specs.notes : "",
     },
     floors_count: property.floors_count ?? undefined,
@@ -34,7 +38,10 @@ export function editablePropertyToFormValues(
     has_annex: property.has_annex ?? false,
     is_direct: property.is_direct,
     intermediaries: property.intermediaries ?? "",
+    google_maps_url: property.google_maps_url ?? "",
+    plot_letter: property.plot_letter ?? "",
     general_notes: property.general_notes ?? "",
+    mark_urgent: isCurrentlyUrgent(property.urgent_until),
     owner_name: property.property_owners[0]?.owner_name ?? "",
     owner_phone: property.property_owners[0]?.owner_phone ?? "",
     private_notes: property.property_owners[0]?.private_notes ?? "",

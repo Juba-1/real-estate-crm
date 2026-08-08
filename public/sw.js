@@ -1,8 +1,17 @@
+self.addEventListener("install", (event) => {
+  // Activate immediately so push registration uses this worker.
+  event.waitUntil(self.skipWaiting())
+})
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim())
+})
+
 self.addEventListener("push", (event) => {
   const fallback = {
     title: "إشعار جديد",
     body: "",
-    url: "/dashboard",
+    url: "/ar/dashboard",
   }
 
   event.waitUntil(
@@ -22,17 +31,11 @@ self.addEventListener("push", (event) => {
           }
         }
 
-        console.log("[sw] showing notification", {
-          title: payload.title,
-          bodyLength: payload.body?.length ?? 0,
-          url: payload.url,
-        })
-
         await self.registration.showNotification(payload.title, {
           body: payload.body,
-          icon: "/favicon.ico",
-          badge: "/favicon.ico",
-          data: { url: payload.url ?? "/dashboard" },
+          icon: "/icons/icon-192.png",
+          badge: "/icons/icon-192.png",
+          data: { url: payload.url ?? "/ar/dashboard" },
           tag: `real-estate-crm-${Date.now()}`,
         })
       } catch (error) {
@@ -40,8 +43,8 @@ self.addEventListener("push", (event) => {
 
         await self.registration.showNotification(fallback.title, {
           body: fallback.body || "لديك إشعار جديد",
-          icon: "/favicon.ico",
-          badge: "/favicon.ico",
+          icon: "/icons/icon-192.png",
+          badge: "/icons/icon-192.png",
           data: { url: fallback.url },
         })
       }
@@ -52,7 +55,7 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close()
 
-  const targetUrl = event.notification.data?.url || "/dashboard"
+  const targetUrl = event.notification.data?.url || "/ar/dashboard"
 
   event.waitUntil(
     clients

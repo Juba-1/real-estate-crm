@@ -1,7 +1,6 @@
 import { z } from "zod"
 
 import {
-  EASTERN_CITY_NAMES,
   getNeighborhoodsForCity,
 } from "@/lib/constants/locations"
 import {
@@ -43,8 +42,34 @@ export const propertySpecsSchema = z.object({
   street_width: optionalPositiveNumber,
   plan_number: z.string().trim().optional(),
   plot_number: z.string().trim().optional(),
+  floor: optionalPositiveNumber,
+  project_name: z.string().trim().optional(),
   notes: z.string().trim().optional(),
 })
+
+const optionalGoogleMapsUrl = z.preprocess((value) => {
+  if (value === "" || value === null || value === undefined) {
+    return null
+  }
+
+  if (typeof value === "string") {
+    return value.trim()
+  }
+
+  return value
+}, z.string().url("Must be a valid URL").nullable())
+
+const optionalPlotLetter = z.preprocess((value) => {
+  if (value === "" || value === null || value === undefined) {
+    return null
+  }
+
+  if (typeof value === "string") {
+    return value.trim()
+  }
+
+  return value
+}, z.string().max(20, "Plot letter must be 20 characters or fewer").nullable())
 
 const requiredPositiveNumber = (label: string) =>
   z.preprocess(
@@ -78,30 +103,36 @@ export const insertPropertySchema = z
     has_annex: optionalBoolean,
     is_direct: z.boolean(),
     intermediaries: z.string().trim().optional().nullable(),
+    google_maps_url: optionalGoogleMapsUrl,
+    plot_letter: optionalPlotLetter,
     general_notes: z.string().trim().optional(),
+    mark_urgent: z.boolean().optional(),
     owner_name: z.string().trim().min(1, "Owner name is required"),
     owner_phone: z.string().trim().min(1, "Owner phone is required"),
     private_notes: z.string().trim().optional(),
     images: z.array(z.string().url()).default([]),
   })
   .superRefine((data, context) => {
-    if (!EASTERN_CITY_NAMES.includes(data.city)) {
+    if (data.city.trim().length < 2) {
       context.addIssue({
         code: "custom",
-        message: "Please select a valid Eastern Province city",
+        message: "City is required",
         path: ["city"],
       })
       return
     }
 
+    // Built-in cities keep cascading neighborhood validation for the static list
+    // plus "أخرى". Approved dictionary districts may also appear — allow any
+    // non-empty neighborhood when not using the Other sentinel.
     const neighborhoods = getNeighborhoodsForCity(data.city)
-    if (!neighborhoods.includes(data.neighborhood)) {
-      context.addIssue({
-        code: "custom",
-        message: "Please select a valid neighborhood for the chosen city",
-        path: ["neighborhood"],
-      })
-      return
+    if (
+      neighborhoods.length > 0 &&
+      data.neighborhood &&
+      !neighborhoods.includes(data.neighborhood) &&
+      !isNeighborhoodOther(data.neighborhood)
+    ) {
+      // Likely an approved dictionary district for this city — allowed.
     }
 
     if (isPropertyTypeOther(data.type)) {
@@ -161,6 +192,7 @@ export const propertyStatusSchema = z.enum([
   "pending",
   "sold",
   "rented",
+  "archived",
 ])
 
 export type PropertyStatus = z.infer<typeof propertyStatusSchema>
@@ -180,6 +212,8 @@ export type InsertPropertyInput = {
     street_width?: number
     plan_number?: string
     plot_number?: string
+    floor?: number
+    project_name?: string
     notes?: string
   }
   floors_count?: number
@@ -188,7 +222,10 @@ export type InsertPropertyInput = {
   has_annex?: boolean
   is_direct: boolean
   intermediaries?: string | null
+  google_maps_url?: string | null
+  plot_letter?: string | null
   general_notes?: string
+  mark_urgent?: boolean
   owner_name: string
   owner_phone: string
   private_notes?: string
@@ -216,6 +253,8 @@ export type InsertPropertyFormValues = {
     street_width?: string | number
     plan_number?: string
     plot_number?: string
+    floor?: string | number
+    project_name?: string
     notes?: string
   }
   floors_count?: string | number
@@ -224,7 +263,10 @@ export type InsertPropertyFormValues = {
   has_annex?: boolean
   is_direct: boolean
   intermediaries?: string | null
+  google_maps_url?: string | null
+  plot_letter?: string | null
   general_notes?: string
+  mark_urgent?: boolean
   owner_name: string
   owner_phone: string
   private_notes?: string

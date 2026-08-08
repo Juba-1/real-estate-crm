@@ -4,12 +4,24 @@ import { revalidatePath } from "next/cache"
 import { redirectTo } from "@/i18n/server-redirect"
 import { isRedirectError } from "next/dist/client/components/redirect-error"
 
-import { createCompanyNotification } from "@/actions/notifications"
+import { applyPropertyUrgentIntent } from "@/actions/urgent"
+import { suggestFromListingFields } from "@/actions/dictionary"
+import {
+  persistPropertyIdentityAfterSave,
+} from "@/actions/intelligence/identity"
+import { notifyOpportunityDiscovery } from "@/actions/intelligence/opportunities"
+import { assertCanManageProperty } from "@/lib/authz/tenant"
+import { createCompanyNotification } from "@/lib/notifications/notify-company"
 import { createClient } from "@/lib/supabase/server"
-import { isNeighborhoodOther, isPropertyTypeOther } from "@/lib/constants/property-types"
+import { EASTERN_CITY_NAMES } from "@/lib/constants/locations"
+import { isNeighborhoodOther, isPropertyTypeOther, PROPERTY_TYPE_VALUES } from "@/lib/constants/property-types"
 import { formatPropertyType } from "@/lib/property-utils"
 import { sendCompanyPushNotification } from "@/lib/push/send-company-push"
 import { QUOTA_EXCEEDED } from "@/lib/quota"
+import {
+  parseIdentityOverride,
+  type IdentityOverride,
+} from "@/types/intelligence/identity"
 import {
   insertPropertySchema,
   updatePropertySchema,
@@ -23,6 +35,10 @@ export type AddPropertyResult =
       message?: string
     }
   | null
+
+export type PropertySaveOptions = {
+  identity_override?: IdentityOverride
+}
 
 function buildSpecsPayload(specs: InsertPropertyInput["specs"]) {
   const payload: Record<string, string | number> = {}
@@ -47,6 +63,14 @@ function buildSpecsPayload(specs: InsertPropertyInput["specs"]) {
     payload.plot_number = specs.plot_number
   }
 
+  if (specs.floor !== undefined) {
+    payload.floor = specs.floor
+  }
+
+  if (specs.project_name) {
+    payload.project_name = specs.project_name
+  }
+
   if (specs.notes) {
     payload.notes = specs.notes
   }
@@ -55,9 +79,16 @@ function buildSpecsPayload(specs: InsertPropertyInput["specs"]) {
 }
 
 export async function addProperty(
-  data: InsertPropertyInput
+  data: InsertPropertyInput,
+  options?: PropertySaveOptions
 ): Promise<AddPropertyResult> {
   const parsed = insertPropertySchema.safeParse(data)
+  const identityOverride =
+    options?.identity_override ??
+    parseIdentityOverride(
+      (data as InsertPropertyInput & { identity_override?: unknown })
+        .identity_override
+    )
 
   if (!parsed.success) {
     return { error: "Invalid property data. Please check all fields." }
@@ -132,6 +163,9 @@ export async function addProperty(
       shops_count,
       has_annex,
       intermediaries,
+      google_maps_url,
+      plot_letter,
+      mark_urgent,
       ...publicFields
     } = parsed.data
 
@@ -155,6 +189,8 @@ export async function addProperty(
         has_annex: has_annex ?? null,
         is_direct: publicFields.is_direct,
         intermediaries: intermediaries?.trim() || null,
+        google_maps_url: google_maps_url?.trim() || null,
+        plot_letter: plot_letter?.trim() || null,
         general_notes: general_notes || null,
         images: images ?? [],
       })
@@ -183,6 +219,54 @@ export async function addProperty(
       }
     }
 
+    if (mark_urgent) {
+      const urgentResult = await applyPropertyUrgentIntent(property.id, true)
+      if (urgentResult?.error) {
+        console.error("[urgent] activate on create failed", {
+          propertyId: property.id,
+          error: urgentResult.error,
+        })
+      }
+    }
+
+    // Dictionary suggestions never block the listing save.
+    void suggestFromListingFields({
+      type: publicFields.type,
+      custom_property_type,
+      city: publicFields.city,
+      neighborhood: publicFields.neighborhood,
+      custom_neighborhood,
+      builtInCities: EASTERN_CITY_NAMES,
+      builtInPropertyTypes: PROPERTY_TYPE_VALUES,
+      isNeighborhoodOther,
+      isPropertyTypeOther,
+    })
+
+    // Identity DNA upsert — never blocks the listing save.
+    void persistPropertyIdentityAfterSave(
+      property.id,
+      profile.company_id,
+      parsed.data,
+      identityOverride
+    )
+
+    // Opportunity notifications — never blocks; anti-spam inside engine.
+    void notifyOpportunityDiscovery({
+      trigger: "property_saved",
+      companyId: profile.company_id,
+      actorUserId: user.id,
+      property: {
+        id: property.id,
+        type: publicFields.type,
+        offer_type: publicFields.offer_type,
+        city: publicFields.city,
+        neighborhood: publicFields.neighborhood,
+        custom_neighborhood,
+        area: publicFields.area,
+        price: publicFields.price,
+      },
+    })
+
     const propertyTypeLabel = isPropertyTypeOther(publicFields.type)
       ? custom_property_type?.trim() ||
         formatPropertyType(publicFields.type)
@@ -198,7 +282,8 @@ export async function addProperty(
     await createCompanyNotification(
       profile.company_id,
       notificationTitle,
-      notificationBody
+      notificationBody,
+      user.id
     )
 
     await sendCompanyPushNotification(profile.company_id, user.id, {
@@ -250,31 +335,29 @@ export async function deleteProperty(
     }
   }
 
-  const { data: property, error: propertyError } = await supabase
-    .from("properties")
-    .select("id, company_id, agent_id")
-    .eq("id", propertyId)
-    .maybeSingle()
-
-  if (propertyError || !property) {
-    return { error: propertyError?.message ?? "Property not found." }
+  const access = await assertCanManageProperty(
+    supabase,
+    user.id,
+    profile,
+    propertyId
+  )
+  if ("error" in access) {
+    return access
   }
 
-  if (property.company_id !== profile.company_id) {
-    return { error: "You do not have permission to delete this property." }
-  }
-
-  const canDelete =
-    property.agent_id === user.id || profile.role === "admin"
-
-  if (!canDelete) {
-    return { error: "You do not have permission to delete this property." }
+  // Hard delete is admin-only. Agents must use requestPropertyRemoval.
+  if (profile.role !== "admin" && profile.role !== "super_admin") {
+    return {
+      error:
+        "You cannot delete properties directly. Submit a removal request for manager approval.",
+    }
   }
 
   const { error: deleteError } = await supabase
     .from("properties")
     .delete()
     .eq("id", propertyId)
+    .eq("company_id", profile.company_id)
 
   if (deleteError) {
     return { error: deleteError.message }
@@ -283,7 +366,8 @@ export async function deleteProperty(
   await createCompanyNotification(
     profile.company_id,
     "تم حذف عقار",
-    `تم حذف العقار بواسطة ${profile.name}`
+    `تم حذف العقار بواسطة ${profile.name}`,
+    user.id
   )
 
   revalidatePath("/dashboard/my-properties")
@@ -295,49 +379,17 @@ export type UpdatePropertyResult = {
   error: string
 } | null
 
-async function canManageProperty(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  userId: string,
-  profile: { company_id: string; role: string },
-  propertyId: string
-): Promise<
-  | { error: string }
-  | {
-      property: {
-        id: string
-        company_id: string
-        agent_id: string
-      }
-    }
-> {
-  const { data: property, error } = await supabase
-    .from("properties")
-    .select("id, company_id, agent_id")
-    .eq("id", propertyId)
-    .maybeSingle()
-
-  if (error || !property) {
-    return { error: error?.message ?? "Property not found." }
-  }
-
-  if (property.company_id !== profile.company_id) {
-    return { error: "You do not have permission to modify this property." }
-  }
-
-  const allowed =
-    property.agent_id === userId || profile.role === "admin"
-
-  if (!allowed) {
-    return { error: "You do not have permission to modify this property." }
-  }
-
-  return { property }
-}
-
 export async function updateProperty(
-  data: UpdatePropertyInput
+  data: UpdatePropertyInput,
+  options?: PropertySaveOptions
 ): Promise<UpdatePropertyResult> {
   const parsed = updatePropertySchema.safeParse(data)
+  const identityOverride =
+    options?.identity_override ??
+    parseIdentityOverride(
+      (data as UpdatePropertyInput & { identity_override?: unknown })
+        .identity_override
+    )
 
   if (!parsed.success) {
     return { error: "Invalid property data. Please check all fields." }
@@ -366,7 +418,7 @@ export async function updateProperty(
     }
   }
 
-  const access = await canManageProperty(
+  const access = await assertCanManageProperty(
     supabase,
     user.id,
     { company_id: profile.company_id, role: profile.role },
@@ -392,6 +444,9 @@ export async function updateProperty(
     shops_count,
     has_annex,
     intermediaries,
+    google_maps_url,
+    plot_letter,
+    mark_urgent,
     ...publicFields
   } = parsed.data
 
@@ -413,6 +468,8 @@ export async function updateProperty(
       has_annex: has_annex ?? null,
       is_direct: publicFields.is_direct,
       intermediaries: intermediaries?.trim() || null,
+      google_maps_url: google_maps_url?.trim() || null,
+      plot_letter: plot_letter?.trim() || null,
       general_notes: general_notes || null,
       images: images ?? [],
     })
@@ -434,6 +491,53 @@ export async function updateProperty(
   if (ownerError) {
     return { error: ownerError.message }
   }
+
+  const urgentResult = await applyPropertyUrgentIntent(
+    propertyId,
+    Boolean(mark_urgent)
+  )
+
+  if (urgentResult?.error) {
+    console.error("[urgent] apply on update failed", {
+      propertyId,
+      error: urgentResult.error,
+    })
+  }
+
+  void suggestFromListingFields({
+    type: publicFields.type,
+    custom_property_type,
+    city: publicFields.city,
+    neighborhood: publicFields.neighborhood,
+    custom_neighborhood,
+    builtInCities: EASTERN_CITY_NAMES,
+    builtInPropertyTypes: PROPERTY_TYPE_VALUES,
+    isNeighborhoodOther,
+    isPropertyTypeOther,
+  })
+
+  void persistPropertyIdentityAfterSave(
+    propertyId,
+    profile.company_id,
+    parsed.data,
+    identityOverride
+  )
+
+  void notifyOpportunityDiscovery({
+    trigger: "property_saved",
+    companyId: profile.company_id,
+    actorUserId: user.id,
+    property: {
+      id: propertyId,
+      type: publicFields.type,
+      offer_type: publicFields.offer_type,
+      city: publicFields.city,
+      neighborhood: publicFields.neighborhood,
+      custom_neighborhood,
+      area: publicFields.area,
+      price: publicFields.price,
+    },
+  })
 
   revalidatePath("/dashboard/my-properties")
   revalidatePath("/dashboard/search")

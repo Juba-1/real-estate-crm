@@ -1,12 +1,37 @@
+import { Suspense } from "react"
+import dynamic from "next/dynamic"
 import { getTranslations } from "next-intl/server"
 
 import { getTenantDashboardStats } from "@/actions/analytics"
-import { TenantAnalyticsDashboard } from "@/components/dashboard/tenant-analytics-dashboard"
+import { Skeleton } from "@/components/ui/skeleton"
 import { getCurrentUser } from "@/lib/data/user"
 
+const TenantAnalyticsDashboard = dynamic(
+  () =>
+    import("@/components/dashboard/tenant-analytics-dashboard").then(
+      (mod) => mod.TenantAnalyticsDashboard
+    ),
+  {
+    loading: () => (
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
+        <Skeleton className="h-8 w-56" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Skeleton className="h-28 rounded-xl" />
+          <Skeleton className="h-28 rounded-xl" />
+          <Skeleton className="h-28 rounded-xl" />
+          <Skeleton className="h-28 rounded-xl" />
+        </div>
+        <Skeleton className="h-72 rounded-xl" />
+      </div>
+    ),
+  }
+)
+
 export default async function DashboardPage() {
-  const user = await getCurrentUser()
-  const t = await getTranslations("common")
+  const [user, t] = await Promise.all([
+    getCurrentUser(),
+    getTranslations("common"),
+  ])
 
   const displayName = user?.name ?? "there"
 
@@ -35,9 +60,18 @@ export default async function DashboardPage() {
   }
 
   return (
-    <TenantAnalyticsDashboard
-      stats={result.stats}
-      displayName={displayName}
-    />
+    <Suspense
+      fallback={
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
+          <Skeleton className="h-8 w-56" />
+          <Skeleton className="h-72 rounded-xl" />
+        </div>
+      }
+    >
+      <TenantAnalyticsDashboard
+        stats={result.stats}
+        displayName={displayName}
+      />
+    </Suspense>
   )
 }

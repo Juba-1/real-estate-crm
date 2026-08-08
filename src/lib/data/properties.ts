@@ -1,5 +1,11 @@
 import { createClient } from "@/lib/supabase/server"
-import { normalizePropertyType } from "@/lib/constants/property-types"
+import { assertCanEditProperty } from "@/lib/authz/tenant"
+import {
+  normalizePropertyType,
+  PROPERTY_TYPE_VALUES,
+} from "@/lib/constants/property-types"
+import { parsePage, type PaginatedResult } from "@/lib/pagination"
+import { compareByUrgency } from "@/lib/urgent"
 import {
   offerTypeSchema,
   propertyStatusSchema,
@@ -25,11 +31,14 @@ export type CompanyPropertySearchParams = {
   type?: string | string[]
   offer_type?: string | string[]
   status?: string | string[]
+  page?: string | string[]
+  pageSize?: string | string[]
 }
 
 export type MyProperty = {
   id: string
   type: PropertyType
+  custom_property_type: string | null
   offer_type: OfferType
   city: string
   neighborhood: string
@@ -39,11 +48,12 @@ export type MyProperty = {
   images: string[]
   status: PropertyStatus
   created_at: string
+  google_maps_url: string | null
+  urgent_until: string | null
   property_owners: PropertyOwnerRecord[]
 }
 
 export type EditableProperty = MyProperty & {
-  custom_property_type: string | null
   custom_neighborhood: string | null
   floors_count: number | null
   apartments_count: number | null
@@ -51,12 +61,14 @@ export type EditableProperty = MyProperty & {
   has_annex: boolean | null
   is_direct: boolean
   intermediaries: string | null
+  plot_letter: string | null
   general_notes: string | null
 }
 
 export type CompanyProperty = {
   id: string
   type: PropertyType
+  custom_property_type: string | null
   offer_type: OfferType
   city: string
   neighborhood: string
@@ -66,6 +78,8 @@ export type CompanyProperty = {
   images: string[]
   status: PropertyStatus
   created_at: string
+  google_maps_url: string | null
+  urgent_until: string | null
   agent: ListingAgent | null
 }
 
@@ -85,8 +99,13 @@ function parseCompanySearchFilters(searchParams: CompanyPropertySearchParams) {
   const offerTypeParam = getSearchParam(searchParams.offer_type)
   const statusParam = getSearchParam(searchParams.status)
 
+  const isBuiltInType =
+    !!typeParam &&
+    (PROPERTY_TYPE_VALUES as readonly string[]).includes(typeParam) &&
+    typeParam !== "other"
+
   const type = propertyTypeSchema.safeParse(
-    typeParam ? normalizePropertyType(typeParam) : undefined
+    isBuiltInType && typeParam ? normalizePropertyType(typeParam) : undefined
   )
   const offer_type = offerTypeSchema.safeParse(offerTypeParam)
   const status = statusParam
@@ -96,6 +115,9 @@ function parseCompanySearchFilters(searchParams: CompanyPropertySearchParams) {
   return {
     city: city || undefined,
     type: type.success ? type.data : undefined,
+    // Approved dictionary labels are stored as type=other + custom_property_type.
+    customPropertyType:
+      typeParam && !isBuiltInType ? typeParam : undefined,
     offer_type: offer_type.success ? offer_type.data : undefined,
     status: status.success ? status.data : ("available" as PropertyStatus),
   }
@@ -103,7 +125,15 @@ function parseCompanySearchFilters(searchParams: CompanyPropertySearchParams) {
 
 export async function getCompanyProperties(
   searchParams: CompanyPropertySearchParams = {}
-): Promise<CompanyProperty[]> {
+): Promise<PaginatedResult<CompanyProperty>> {
+  const empty: PaginatedResult<CompanyProperty> = {
+    items: [],
+    page: 1,
+    pageSize: 24,
+    total: 0,
+    hasMore: false,
+  }
+
   const supabase = await createClient()
   const {
     data: { user },
@@ -111,10 +141,11 @@ export async function getCompanyProperties(
   } = await supabase.auth.getUser()
 
   if (authError || !user) {
-    return []
+    return empty
   }
 
   const filters = parseCompanySearchFilters(searchParams)
+  const { page, pageSize, from, to } = parsePage(searchParams)
 
   let query = supabase
     .from("properties")
@@ -122,6 +153,7 @@ export async function getCompanyProperties(
       `
       id,
       type,
+      custom_property_type,
       offer_type,
       city,
       neighborhood,
@@ -131,14 +163,19 @@ export async function getCompanyProperties(
       images,
       status,
       created_at,
+      google_maps_url,
+      urgent_until,
       agent:users!properties_agent_id_fkey (
         name,
         phone
       )
-    `
+    `,
+      { count: "exact" }
     )
     .eq("status", filters.status)
+    .order("urgent_until", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
+    .range(from, to)
 
   if (filters.city) {
     query = query.eq("city", filters.city)
@@ -146,27 +183,50 @@ export async function getCompanyProperties(
 
   if (filters.type) {
     query = query.eq("type", filters.type)
+  } else if (filters.customPropertyType) {
+    query = query
+      .eq("type", "other")
+      .eq("custom_property_type", filters.customPropertyType)
   }
 
   if (filters.offer_type) {
     query = query.eq("offer_type", filters.offer_type)
   }
 
-  const { data, error } = await query
+  const { data, error, count } = await query
 
   if (error || !data) {
-    return []
+    return { ...empty, page, pageSize }
   }
 
-  return data.map((property) => ({
+  const items = data.map((property) => ({
     ...property,
     agent: Array.isArray(property.agent)
       ? (property.agent[0] ?? null)
       : property.agent,
   })) as CompanyProperty[]
+
+  const total = count ?? items.length
+  return {
+    items: items.sort(compareByUrgency),
+    page,
+    pageSize,
+    total,
+    hasMore: from + items.length < total,
+  }
 }
 
-export async function getMyProperties(): Promise<MyProperty[]> {
+export async function getMyProperties(
+  pageParams: { page?: string | string[]; pageSize?: string | string[] } = {}
+): Promise<PaginatedResult<MyProperty>> {
+  const empty: PaginatedResult<MyProperty> = {
+    items: [],
+    page: 1,
+    pageSize: 24,
+    total: 0,
+    hasMore: false,
+  }
+
   const supabase = await createClient()
   const {
     data: { user },
@@ -174,15 +234,18 @@ export async function getMyProperties(): Promise<MyProperty[]> {
   } = await supabase.auth.getUser()
 
   if (authError || !user) {
-    return []
+    return empty
   }
 
-  const { data, error } = await supabase
+  const { page, pageSize, from, to } = parsePage(pageParams)
+
+  const { data, error, count } = await supabase
     .from("properties")
     .select(
       `
       id,
       type,
+      custom_property_type,
       offer_type,
       city,
       neighborhood,
@@ -192,21 +255,34 @@ export async function getMyProperties(): Promise<MyProperty[]> {
       images,
       status,
       created_at,
+      google_maps_url,
+      urgent_until,
       property_owners (
         owner_name,
         owner_phone,
         private_notes
       )
-    `
+    `,
+      { count: "exact" }
     )
     .eq("agent_id", user.id)
+    .order("urgent_until", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
+    .range(from, to)
 
   if (error || !data) {
-    return []
+    return { ...empty, page, pageSize }
   }
 
-  return data as MyProperty[]
+  const items = (data as MyProperty[]).sort(compareByUrgency)
+  const total = count ?? items.length
+  return {
+    items,
+    page,
+    pageSize,
+    total,
+    hasMore: from + items.length < total,
+  }
 }
 
 const EDITABLE_PROPERTY_SELECT = `
@@ -228,8 +304,11 @@ const EDITABLE_PROPERTY_SELECT = `
   has_annex,
   is_direct,
   intermediaries,
+  google_maps_url,
+  plot_letter,
   general_notes,
   created_at,
+  urgent_until,
   property_owners (
     owner_name,
     owner_phone,
@@ -250,10 +329,31 @@ export async function getPropertyForEdit(
     return null
   }
 
+  const { data: profile, error: profileError } = await supabase
+    .from("users")
+    .select("company_id, role")
+    .eq("id", user.id)
+    .maybeSingle()
+
+  if (profileError || !profile?.company_id || !profile.role) {
+    return null
+  }
+
+  const access = await assertCanEditProperty(
+    supabase,
+    user.id,
+    profile,
+    propertyId
+  )
+  if ("error" in access) {
+    return null
+  }
+
   const { data, error } = await supabase
     .from("properties")
     .select(EDITABLE_PROPERTY_SELECT)
     .eq("id", propertyId)
+    .eq("company_id", profile.company_id)
     .maybeSingle()
 
   if (error || !data) {

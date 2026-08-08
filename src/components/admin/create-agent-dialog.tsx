@@ -21,6 +21,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -137,6 +138,7 @@ export function CreateAgentDialog() {
                       }}
                     />
                   </FormControl>
+                  <FormDescription>{t("usernameHint")}</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

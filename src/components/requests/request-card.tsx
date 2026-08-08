@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/card"
 import { usePropertyLabels } from "@/hooks/use-property-labels"
 import type { CompanyRequest } from "@/lib/data/requests"
+import { getExpiryBadgeClassName, URGENT_BADGE_CLASS } from "@/lib/ui/badge-styles"
+import { isCurrentlyUrgent } from "@/lib/urgent"
 import { cn } from "@/lib/utils"
 import type { ManageRequestAction } from "@/types/request"
 import type { UserRole } from "@/types/user"
@@ -26,18 +28,6 @@ function getDaysUntilExpiry(expiresAt: string) {
   const expiry = new Date(expiresAt)
   const diffMs = expiry.getTime() - now.getTime()
   return Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)))
-}
-
-function getExpiryBadgeClassName(daysLeft: number) {
-  if (daysLeft <= 3) {
-    return "border-destructive/30 bg-destructive/15 text-destructive"
-  }
-
-  if (daysLeft <= 7) {
-    return "border-amber-500/30 bg-amber-500/15 text-amber-700 dark:text-amber-300"
-  }
-
-  return "border-border bg-muted text-muted-foreground"
 }
 
 type RequestCardProps = {
@@ -54,8 +44,10 @@ export function RequestCard({
   const [isPending, startTransition] = useTransition()
   const t = useTranslations("requests")
   const tCommon = useTranslations("common")
+  const tUrgent = useTranslations("urgent")
   const { propertyType, offerType } = usePropertyLabels()
   const daysLeft = getDaysUntilExpiry(request.expires_at)
+  const isUrgent = isCurrentlyUrgent(request.urgent_until)
   const canManage =
     currentUserId === request.agent_id ||
     currentUserRole === "admin" ||
@@ -97,19 +89,31 @@ export function RequestCard({
   }
 
   return (
-    <Card className="flex h-full flex-col">
+    <Card
+      className={cn(
+        "flex h-full flex-col",
+        isUrgent && "border-t-4 border-t-destructive"
+      )}
+    >
       <CardHeader className="gap-3">
         <div className="flex items-start justify-between gap-3">
           <CardTitle className="text-base leading-snug">
             {t("wanted", {
               offer: offerType(request.offer_type),
-              type: propertyType(request.type),
+              type: propertyType(request.type, request.custom_property_type),
               location: locationLabel,
             })}
           </CardTitle>
-          <Badge className={cn(getExpiryBadgeClassName(daysLeft))}>
-            {getExpiryLabel()}
-          </Badge>
+          <div className="flex flex-wrap justify-end gap-2">
+            {isUrgent ? (
+              <Badge className={URGENT_BADGE_CLASS}>
+                {tUrgent("badge")}
+              </Badge>
+            ) : null}
+            <Badge className={cn(getExpiryBadgeClassName(daysLeft))}>
+              {getExpiryLabel()}
+            </Badge>
+          </div>
         </div>
       </CardHeader>
 

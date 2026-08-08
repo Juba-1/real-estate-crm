@@ -105,7 +105,13 @@ export function AddCompanyDialog({ packages }: AddCompanyDialogProps) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <div className="flex flex-col items-end gap-2">
+      {packages.length === 0 ? (
+        <p className="max-w-sm text-end text-sm text-muted-foreground">
+          {t("noPackagesHint")}
+        </p>
+      ) : null}
+      <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button disabled={packages.length === 0}>
           <Building2Icon className="size-4" />
@@ -295,5 +301,6 @@ export function AddCompanyDialog({ packages }: AddCompanyDialogProps) {
         </Form>
       </DialogContent>
     </Dialog>
+    </div>
   )
 }

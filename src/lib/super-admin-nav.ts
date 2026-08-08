@@ -1,4 +1,5 @@
 import {
+  BookOpenIcon,
   Building2Icon,
   LayoutDashboardIcon,
   PackageIcon,
@@ -10,6 +11,7 @@ export type SuperAdminNavItemKey =
   | "overview"
   | "companies"
   | "packages"
+  | "dictionary"
   | "globalSettings"
 
 export type SuperAdminNavItem = {
@@ -33,6 +35,11 @@ export const superAdminNavItems: SuperAdminNavItem[] = [
     titleKey: "packages",
     href: "/super-admin/packages",
     icon: PackageIcon,
+  },
+  {
+    titleKey: "dictionary",
+    href: "/super-admin/dictionary",
+    icon: BookOpenIcon,
   },
   {
     titleKey: "globalSettings",

@@ -198,6 +198,26 @@ export async function deleteCompanyUser(
     return { error: "Super admin accounts cannot be deleted from this panel." }
   }
 
+  if (targetCheck.target.role === "admin") {
+    const supabase = await createClient()
+    const { count, error: adminCountError } = await supabase
+      .from("users")
+      .select("*", { count: "exact", head: true })
+      .eq("company_id", context.companyId)
+      .eq("role", "admin")
+
+    if (adminCountError) {
+      return { error: adminCountError.message }
+    }
+
+    if ((count ?? 0) <= 1) {
+      return {
+        error:
+          "Cannot delete the last office admin. Promote another admin first.",
+      }
+    }
+  }
+
   const adminClient = createAdminClient()
   const { error: deleteError } =
     await adminClient.auth.admin.deleteUser(targetUserId)

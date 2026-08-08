@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server"
 
 import { CreatePackageDialog } from "@/components/super-admin/create-package-dialog"
 import { PackagePricingCard } from "@/components/super-admin/package-pricing-card"
+import { EmptyState } from "@/components/ui/empty-state"
 import { getAllPackages } from "@/lib/data/packages"
 
 export default async function SuperAdminPackagesPage() {
@@ -25,9 +26,11 @@ export default async function SuperAdminPackagesPage() {
       </div>
 
       {packages.length === 0 ? (
-        <div className="flex min-h-48 items-center justify-center rounded-xl border border-dashed bg-muted/20 p-8 text-center text-muted-foreground">
-          {t("emptyPackages")}
-        </div>
+        <EmptyState
+          title={t("emptyPackages")}
+          description={t("noPackagesHint")}
+          action={<CreatePackageDialog />}
+        />
       ) : (
         <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
           {packages.map((pkg) => (

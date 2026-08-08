@@ -1,10 +1,12 @@
 "use client"
 
 import {
+  ArchiveIcon,
   Building2Icon,
   CheckCircle2Icon,
   ClipboardListIcon,
   HomeIcon,
+  Trash2Icon,
   UsersIcon,
 } from "lucide-react"
 import { useTranslations } from "next-intl"
@@ -41,6 +43,7 @@ const STATUS_COLORS: Record<PropertyStatus, string> = {
   pending: "var(--chart-4)",
   sold: "var(--chart-2)",
   rented: "var(--chart-3)",
+  archived: "var(--muted-foreground)",
 }
 
 type TenantAnalyticsDashboardProps = {
@@ -173,6 +176,28 @@ export function TenantAnalyticsDashboard({
           accent="border-amber-200/70 bg-amber-50/40 dark:border-amber-900/50 dark:bg-amber-950/20"
           iconWrap="bg-amber-500/10"
           iconColor="text-amber-600 dark:text-amber-400"
+        />
+        <MetricCard
+          title={t("archived")}
+          value={stats.archived}
+          description={t("archivedDesc")}
+          icon={ArchiveIcon}
+          accent="border-slate-200/70 bg-slate-50/40 dark:border-slate-800/50 dark:bg-slate-950/20"
+          iconWrap="bg-slate-500/10"
+          iconColor="text-slate-600 dark:text-slate-400"
+        />
+        <MetricCard
+          title={t("pendingRemovals")}
+          value={stats.pendingRemovals}
+          description={
+            stats.isAdminView
+              ? t("pendingRemovalsAdminDesc")
+              : t("pendingRemovalsAgentDesc")
+          }
+          icon={Trash2Icon}
+          accent="border-rose-200/70 bg-rose-50/40 dark:border-rose-900/50 dark:bg-rose-950/20"
+          iconWrap="bg-rose-500/10"
+          iconColor="text-rose-600 dark:text-rose-400"
         />
       </div>
 

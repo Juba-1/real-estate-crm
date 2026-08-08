@@ -1,3 +1,5 @@
+import "server-only"
+
 import webpush from "web-push"
 
 import { createAdminClient } from "@/lib/supabase/admin"
@@ -90,11 +92,6 @@ function getPushErrorDetails(error: unknown) {
   return { message: String(error) }
 }
 
-function getPushErrorStatusCode(error: unknown): number | undefined {
-  const details = getPushErrorDetails(error)
-  return details.statusCode
-}
-
 function safeEndpointHost(endpoint: string): string {
   try {
     return new URL(endpoint).host
@@ -129,18 +126,20 @@ function toWebPushSubscription(
 }
 
 /**
- * Sends Web Push alerts to every subscription in `companyId`.
- * Uses admin client but ALWAYS filters by company_id for tenant isolation.
+ * Sends Web Push alerts to subscriptions in `companyId`.
+ * ALWAYS filters by company_id. Optional recipientUserIds narrows delivery.
  */
 export async function sendCompanyPushNotification(
   companyId: string,
   excludeUserId: string | null,
-  payload: CompanyPushPayload
+  payload: CompanyPushPayload,
+  recipientUserIds?: string[]
 ): Promise<void> {
   console.log(`${LOG_PREFIX} broadcast start`, {
     companyId,
     excludeUserId,
     title: payload.title,
+    recipientCount: recipientUserIds?.length,
   })
 
   try {
@@ -157,6 +156,10 @@ export async function sendCompanyPushNotification(
 
     if (excludeUserId) {
       query = query.neq("user_id", excludeUserId)
+    }
+
+    if (recipientUserIds && recipientUserIds.length > 0) {
+      query = query.in("user_id", recipientUserIds)
     }
 
     const { data, error } = await query
@@ -205,10 +208,14 @@ export async function sendCompanyPushNotification(
           throw new Error(`Invalid subscription ${row.id}`)
         }
 
-        const response = await webpush.sendNotification(pushSubscription, message, {
-          TTL: 60 * 60 * 24,
-          urgency: "high",
-        })
+        const response = await webpush.sendNotification(
+          pushSubscription,
+          message,
+          {
+            TTL: 60 * 60 * 24,
+            urgency: "high",
+          }
+        )
 
         console.log(`${LOG_PREFIX} sendNotification success`, {
           subscriptionId: row.id,
@@ -225,8 +232,7 @@ export async function sendCompanyPushNotification(
 
     results.forEach((result, index) => {
       const row = subscriptions[index]
-
-      if (result.status === "fulfilled") {
+      if (!row || result.status === "fulfilled") {
         return
       }
 

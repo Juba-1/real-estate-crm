@@ -13,6 +13,7 @@ import {
 import { usePropertyLabels } from "@/hooks/use-property-labels"
 import { usePathname, useRouter } from "@/i18n/navigation"
 import { EASTERN_CITY_NAMES } from "@/lib/constants/locations"
+import { PROPERTY_TYPE_VALUES } from "@/lib/constants/property-types"
 import { PROPERTY_TYPES } from "@/lib/property-utils"
 import type { OfferType, PropertyStatus, PropertyType } from "@/types/property"
 import { useSearchParams } from "next/navigation"
@@ -28,13 +29,27 @@ const STATUS_OPTIONS: PropertyStatus[] = [
 
 const ALL_VALUE = "all"
 
-export function SearchFilters() {
+type SearchFiltersProps = {
+  cityOptions?: string[]
+  approvedPropertyTypes?: string[]
+}
+
+export function SearchFilters({
+  cityOptions,
+  approvedPropertyTypes = [],
+}: SearchFiltersProps) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const { propertyType, offerType, status } = usePropertyLabels()
   const t = useTranslations("search")
   const tFields = useTranslations("fields")
+
+  const cities = cityOptions?.length ? cityOptions : EASTERN_CITY_NAMES
+  const typeOptions = [
+    ...PROPERTY_TYPES.filter((type) => type !== "other"),
+    ...approvedPropertyTypes,
+  ]
 
   const currentCity = searchParams.get("city") ?? ALL_VALUE
   const currentType = searchParams.get("type") ?? ALL_VALUE
@@ -50,6 +65,9 @@ export function SearchFilters() {
       } else {
         params.set(key, value)
       }
+
+      // Changing filters must return to page 1 — otherwise page=N can look empty.
+      params.delete("page")
 
       const query = params.toString()
       router.push(query ? `${pathname}?${query}` : pathname)
@@ -72,7 +90,7 @@ export function SearchFilters() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL_VALUE}>{t("allCities")}</SelectItem>
-            {EASTERN_CITY_NAMES.map((city) => (
+            {cities.map((city) => (
               <SelectItem key={city} value={city}>
                 {city}
               </SelectItem>
@@ -94,9 +112,11 @@ export function SearchFilters() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL_VALUE}>{t("allTypes")}</SelectItem>
-            {PROPERTY_TYPES.map((type) => (
+            {typeOptions.map((type) => (
               <SelectItem key={type} value={type}>
-                {propertyType(type)}
+                {(PROPERTY_TYPE_VALUES as readonly string[]).includes(type)
+                  ? propertyType(type as PropertyType)
+                  : type}
               </SelectItem>
             ))}
           </SelectContent>

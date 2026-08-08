@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js"
+import "server-only"
 
 /**
  * Server-only Supabase client with service role privileges.

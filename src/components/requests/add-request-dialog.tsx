@@ -1,13 +1,22 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { CheckIcon, ChevronsUpDownIcon, PlusCircleIcon } from "lucide-react"
+import { PlusCircleIcon } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { useForm, type Resolver } from "react-hook-form"
 import { toast } from "sonner"
 
+import { loadDistrictOptionsAction } from "@/actions/dictionary"
 import { addRequest } from "@/actions/request"
+import { checkUrgentRequestConflict } from "@/actions/urgent"
+import { MarkUrgentField } from "@/components/forms/mark-urgent-field"
+import { UrgentTransferDialog } from "@/components/forms/urgent-transfer-dialog"
+import { LiveOpportunityPanel } from "@/components/intelligence/live-opportunity-panel"
+import { RequestBasicFields } from "@/components/requests/form/request-basic-fields"
+import { RequestBudgetFields } from "@/components/requests/form/request-budget-fields"
+import { RequestDetailsField } from "@/components/requests/form/request-details-field"
+import { RequestLocationFields } from "@/components/requests/form/request-location-fields"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -17,65 +26,34 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form"
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
-import { Input } from "@/components/ui/input"
-import { usePropertyLabels } from "@/hooks/use-property-labels"
-import {
-  EASTERN_CITY_NAMES,
-  getNeighborhoodsForCity,
-} from "@/lib/constants/locations"
-import {
-  isNeighborhoodOther,
-  isPropertyTypeOther,
-  PROPERTY_TYPE_VALUES,
-} from "@/lib/constants/property-types"
-import { cn } from "@/lib/utils"
+import { Form } from "@/components/ui/form"
+import { EASTERN_CITY_NAMES } from "@/lib/constants/locations"
+import { PROPERTY_TYPE_VALUES } from "@/lib/constants/property-types"
+import { isCityOther } from "@/lib/dictionary-ui"
 import {
   insertRequestSchema,
   type InsertRequestFormValues,
   type InsertRequestInput,
 } from "@/types/request"
-import type { OfferType, PropertyType } from "@/types/property"
 
-const OFFER_TYPES: OfferType[] = ["sale", "rent"]
+type AddRequestDialogProps = {
+  cityOptions?: string[]
+  approvedPropertyTypes?: string[]
+}
 
-export function AddRequestDialog() {
+export function AddRequestDialog({
+  cityOptions,
+  approvedPropertyTypes = [],
+}: AddRequestDialogProps) {
   const [open, setOpen] = useState(false)
-  const [neighborhoodOpen, setNeighborhoodOpen] = useState(false)
+  const [urgentTransferDialogOpen, setUrgentTransferDialogOpen] = useState(false)
+  const [customCity, setCustomCity] = useState("")
+  const [districtOptions, setDistrictOptions] = useState<string[]>([])
   const t = useTranslations("requests")
-  const tFields = useTranslations("fields")
-  const tProps = useTranslations("properties")
-  const tPlaceholders = useTranslations("placeholders")
   const tErrors = useTranslations("errors")
-  const { propertyType, offerType } = usePropertyLabels()
+  const tDict = useTranslations("dictionary")
+
+  const cities = cityOptions?.length ? cityOptions : EASTERN_CITY_NAMES
 
   const form = useForm<InsertRequestFormValues>({
     resolver: zodResolver(
@@ -89,21 +67,105 @@ export function AddRequestDialog() {
       neighborhood: "",
       custom_neighborhood: "",
       details: "",
+      budget_min: undefined,
+      budget_max: undefined,
+      area_min: undefined,
+      area_max: undefined,
+      mark_urgent: false,
     },
   })
 
   const selectedCity = form.watch("city")
   const selectedType = form.watch("type")
   const selectedNeighborhood = form.watch("neighborhood")
-  const showCustomType = isPropertyTypeOther(selectedType)
-  const showCustomNeighborhood = isNeighborhoodOther(selectedNeighborhood)
-  const neighborhoods = getNeighborhoodsForCity(selectedCity)
+  const opportunityInput = {
+    direction: "request_to_properties" as const,
+    type: selectedType === "other" ? "other" : selectedType,
+    offer_type: form.watch("offer_type"),
+    city: isCityOther(selectedCity) ? customCity : selectedCity,
+    neighborhood: selectedNeighborhood,
+    custom_neighborhood: form.watch("custom_neighborhood"),
+    budget_min: form.watch("budget_min")
+      ? Number(form.watch("budget_min"))
+      : null,
+    budget_max: form.watch("budget_max")
+      ? Number(form.watch("budget_max"))
+      : null,
+    area_min: form.watch("area_min") ? Number(form.watch("area_min")) : null,
+    area_max: form.watch("area_max") ? Number(form.watch("area_max")) : null,
+  }
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadDistricts() {
+      if (!selectedCity || isCityOther(selectedCity)) {
+        setDistrictOptions([])
+        return
+      }
+
+      const options = await loadDistrictOptionsAction(selectedCity)
+      if (!cancelled) {
+        setDistrictOptions(options)
+      }
+    }
+
+    void loadDistricts()
+    return () => {
+      cancelled = true
+    }
+  }, [selectedCity])
+
+  async function handleMarkUrgentToggle(checked: boolean) {
+    if (!checked) {
+      form.setValue("mark_urgent", false)
+      return
+    }
+
+    const { hasConflict } = await checkUrgentRequestConflict()
+
+    if (hasConflict) {
+      setUrgentTransferDialogOpen(true)
+      return
+    }
+
+    form.setValue("mark_urgent", true)
+  }
+
+  function confirmUrgentTransfer() {
+    form.setValue("mark_urgent", true)
+    setUrgentTransferDialogOpen(false)
+  }
+
+  function cancelUrgentTransfer() {
+    form.setValue("mark_urgent", false)
+    setUrgentTransferDialogOpen(false)
+  }
 
   async function onSubmit(values: InsertRequestFormValues) {
-    const parsed = insertRequestSchema.safeParse(values)
+    const payload = { ...values }
+
+    if (isCityOther(payload.city)) {
+      const nextCity = customCity.trim()
+      if (nextCity.length < 2) {
+        toast.error(tDict("customCityRequired"))
+        return
+      }
+      payload.city = nextCity
+    }
+
+    if (
+      payload.type &&
+      !(PROPERTY_TYPE_VALUES as readonly string[]).includes(payload.type)
+    ) {
+      payload.custom_property_type = payload.type
+      payload.type = "other"
+    }
+
+    const parsed = insertRequestSchema.safeParse(payload)
 
     if (!parsed.success) {
-      toast.error(tErrors("fixFields"))
+      toast.error(tErrors("formFields"))
       return
     }
 
@@ -116,6 +178,7 @@ export function AddRequestDialog() {
 
     toast.success(t("toastPosted"))
     form.reset()
+    setCustomCity("")
     setOpen(false)
   }
 
@@ -127,7 +190,7 @@ export function AddRequestDialog() {
           {t("postNew")}
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t("dialogTitle")}</DialogTitle>
           <DialogDescription>{t("dialogDescription")}</DialogDescription>
@@ -135,227 +198,27 @@ export function AddRequestDialog() {
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <FormField
-                control={form.control}
-                name="type"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{tProps("propertyType")}</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder={tPlaceholders("selectType")} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {PROPERTY_TYPE_VALUES.map((type) => (
-                          <SelectItem key={type} value={type}>
-                            {propertyType(type)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {showCustomType ? (
-                <FormField
-                  control={form.control}
-                  name="custom_property_type"
-                  render={({ field }) => (
-                    <FormItem className="sm:col-span-2">
-                      <FormLabel>{tFields("customPropertyType")}</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder={tPlaceholders("customPropertyType")}
-                          {...field}
-                          value={field.value ?? ""}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              ) : null}
-
-              <FormField
-                control={form.control}
-                name="offer_type"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{tFields("offerType")}</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder={tPlaceholders("selectOffer")} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {OFFER_TYPES.map((type) => (
-                          <SelectItem key={type} value={type}>
-                            {offerType(type)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <FormField
-                control={form.control}
-                name="city"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{tFields("city")}</FormLabel>
-                    <Select
-                      onValueChange={(value) => {
-                        field.onChange(value)
-                        form.setValue("neighborhood", "")
-                        form.setValue("custom_neighborhood", "")
-                      }}
-                      value={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder={tPlaceholders("selectCity")} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {EASTERN_CITY_NAMES.map((city) => (
-                          <SelectItem key={city} value={city}>
-                            {city}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="neighborhood"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>{tFields("neighborhood")}</FormLabel>
-                    <Popover
-                      open={neighborhoodOpen}
-                      onOpenChange={setNeighborhoodOpen}
-                    >
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            role="combobox"
-                            disabled={!selectedCity}
-                            className={cn(
-                              "w-full justify-between font-normal",
-                              !field.value && "text-muted-foreground"
-                            )}
-                          >
-                            {field.value || tPlaceholders("selectNeighborhood")}
-                            <ChevronsUpDownIcon className="size-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent
-                        className="w-(--radix-popover-trigger-width) p-0"
-                        align="start"
-                      >
-                        <Command>
-                          <CommandInput
-                            placeholder={tPlaceholders("searchNeighborhood")}
-                          />
-                          <CommandList>
-                            <CommandEmpty>
-                              {tPlaceholders("noNeighborhood")}
-                            </CommandEmpty>
-                            <CommandGroup>
-                              {neighborhoods.map((neighborhood) => (
-                                <CommandItem
-                                  key={neighborhood}
-                                  value={neighborhood}
-                                  onSelect={() => {
-                                    field.onChange(neighborhood)
-                                    if (!isNeighborhoodOther(neighborhood)) {
-                                      form.setValue("custom_neighborhood", "")
-                                    }
-                                    setNeighborhoodOpen(false)
-                                  }}
-                                >
-                                  <CheckIcon
-                                    className={cn(
-                                      "size-4",
-                                      neighborhood === field.value
-                                        ? "opacity-100"
-                                        : "opacity-0"
-                                    )}
-                                  />
-                                  {neighborhood}
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {showCustomNeighborhood ? (
-                <FormField
-                  control={form.control}
-                  name="custom_neighborhood"
-                  render={({ field }) => (
-                    <FormItem className="sm:col-span-2">
-                      <FormLabel>{tFields("customNeighborhood")}</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder={tPlaceholders("customNeighborhood")}
-                          {...field}
-                          value={field.value ?? ""}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              ) : null}
-            </div>
-
-            <FormField
+            <RequestBasicFields
               control={form.control}
-              name="details"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{tFields("details")}</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder={tPlaceholders("requestDetails")}
-                      className="min-h-24 resize-y"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+              approvedPropertyTypes={approvedPropertyTypes}
+            />
+
+            <RequestLocationFields
+              control={form.control}
+              cities={cities}
+              customCity={customCity}
+              onCustomCityChange={setCustomCity}
+              districtOptions={districtOptions}
+            />
+
+            <RequestBudgetFields control={form.control} />
+
+            <RequestDetailsField control={form.control} />
+
+            <MarkUrgentField
+              control={form.control}
+              hintKey="markHintRequest"
+              onCheckedChange={handleMarkUrgentToggle}
             />
 
             <Button
@@ -365,8 +228,18 @@ export function AddRequestDialog() {
             >
               {form.formState.isSubmitting ? t("posting") : t("postRequest")}
             </Button>
+
+            <LiveOpportunityPanel input={opportunityInput} />
           </form>
         </Form>
+
+        <UrgentTransferDialog
+          open={urgentTransferDialogOpen}
+          onOpenChange={setUrgentTransferDialogOpen}
+          onConfirm={confirmUrgentTransfer}
+          onCancel={cancelUrgentTransfer}
+          entity="request"
+        />
       </DialogContent>
     </Dialog>
   )

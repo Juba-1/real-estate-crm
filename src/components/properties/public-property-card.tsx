@@ -1,9 +1,10 @@
 "use client"
 
-import { Building2Icon, PhoneIcon, UserIcon } from "lucide-react"
-import { useTranslations } from "next-intl"
+import { Building2Icon, MapPinIcon, PhoneIcon, UserIcon } from "lucide-react"
+import { useLocale, useTranslations } from "next-intl"
 
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
@@ -11,41 +12,38 @@ import {
 } from "@/components/ui/card"
 import { usePropertyLabels } from "@/hooks/use-property-labels"
 import type { CompanyProperty } from "@/lib/data/properties"
+import { getPropertyStatusBadgeClassName, URGENT_BADGE_CLASS } from "@/lib/ui/badge-styles"
+import { formatListingDate } from "@/lib/format-listing-date"
+import { isCurrentlyUrgent } from "@/lib/urgent"
 import { cn } from "@/lib/utils"
 import type { PropertyStatus } from "@/types/property"
-
-function getStatusBadgeClassName(status: PropertyStatus) {
-  switch (status) {
-    case "available":
-      return "border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
-    case "pending":
-      return "border-amber-500/30 bg-amber-500/15 text-amber-700 dark:text-amber-300"
-    case "sold":
-      return "border-destructive/30 bg-destructive/15 text-destructive"
-    case "rented":
-      return "border-sky-500/30 bg-sky-500/15 text-sky-700 dark:text-sky-300"
-    default:
-      return ""
-  }
-}
 
 type PublicPropertyCardProps = {
   property: CompanyProperty
 }
 
 export function PublicPropertyCard({ property }: PublicPropertyCardProps) {
+  const locale = useLocale()
   const { propertyType, offerType, status, formatPrice } = usePropertyLabels()
   const t = useTranslations("properties")
   const tCommon = useTranslations("common")
+  const tUrgent = useTranslations("urgent")
 
   const thumbnail = property.images[0]
   const rooms =
     typeof property.specs?.rooms === "number" ? property.specs.rooms : null
   const agentName = property.agent?.name ?? tCommon("unknownAgent")
   const agentPhone = property.agent?.phone
+  const listingDate = formatListingDate(property.created_at, locale)
+  const isUrgent = isCurrentlyUrgent(property.urgent_until)
 
   return (
-    <Card className="overflow-hidden pt-0">
+    <Card
+      className={cn(
+        "overflow-hidden pt-0",
+        isUrgent && "border-t-4 border-t-destructive"
+      )}
+    >
       <div className="relative aspect-[16/10] w-full bg-muted">
         {thumbnail ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -60,8 +58,19 @@ export function PublicPropertyCard({ property }: PublicPropertyCardProps) {
           </div>
         )}
 
-        <div className="absolute start-3 top-3 flex flex-wrap gap-2">
-          <Badge className={cn(getStatusBadgeClassName(property.status))}>
+        <div className="absolute left-3 top-3 z-10">
+          <span className="rounded-md bg-background/85 px-2 py-1 text-[11px] font-medium text-foreground/80 shadow-sm backdrop-blur-sm">
+            {listingDate}
+          </span>
+        </div>
+
+        <div className="absolute right-3 top-3 flex flex-wrap justify-end gap-2">
+          {isUrgent ? (
+            <Badge className={URGENT_BADGE_CLASS}>
+              {tUrgent("badge")}
+            </Badge>
+          ) : null}
+          <Badge className={cn(getPropertyStatusBadgeClassName(property.status))}>
             {status(property.status)}
           </Badge>
           <Badge variant="secondary">
@@ -80,7 +89,9 @@ export function PublicPropertyCard({ property }: PublicPropertyCardProps) {
               {property.city}, {property.neighborhood}
             </p>
           </div>
-          <Badge variant="outline">{propertyType(property.type)}</Badge>
+          <Badge variant="outline">
+            {propertyType(property.type, property.custom_property_type)}
+          </Badge>
         </div>
       </CardHeader>
 
@@ -94,6 +105,18 @@ export function PublicPropertyCard({ property }: PublicPropertyCardProps) {
             <span className="text-muted-foreground">{t("rooms")}:</span>{" "}
             {rooms}
           </p>
+        ) : null}
+        {property.google_maps_url ? (
+          <Button asChild variant="secondary" size="sm" className="mt-2 gap-2">
+            <a
+              href={property.google_maps_url}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <MapPinIcon className="size-4" />
+              {t("viewLocation")}
+            </a>
+          </Button>
         ) : null}
       </CardContent>
 

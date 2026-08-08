@@ -1,3 +1,8 @@
+/**
+ * Request-level memoization for company branding (sidebar/header).
+ */
+import { cache } from "react"
+
 import { createClient } from "@/lib/supabase/server"
 
 export type CompanyBranding = {
@@ -6,7 +11,7 @@ export type CompanyBranding = {
   logo_url: string | null
 }
 
-export async function getCompanyBranding(
+async function loadCompanyBranding(
   companyId: string
 ): Promise<CompanyBranding | null> {
   const supabase = await createClient()
@@ -22,3 +27,5 @@ export async function getCompanyBranding(
 
   return data
 }
+
+export const getCompanyBranding = cache(loadCompanyBranding)

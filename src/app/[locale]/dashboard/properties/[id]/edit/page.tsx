@@ -2,6 +2,8 @@ import { notFound } from "next/navigation"
 import { getTranslations } from "next-intl/server"
 
 import { AddPropertyForm } from "@/components/dashboard/add-property-form"
+import { getApprovedDictionaryValues } from "@/lib/data/dictionary"
+import { getCityOptions } from "@/lib/dictionary-catalog"
 import { getPropertyForEdit } from "@/lib/data/properties"
 import { editablePropertyToFormValues } from "@/lib/property-form-utils"
 import { getCurrentUser } from "@/lib/data/user"
@@ -12,10 +14,12 @@ type EditPropertyPageProps = {
 
 export default async function EditPropertyPage({ params }: EditPropertyPageProps) {
   const { id } = await params
-  const [property, user, t] = await Promise.all([
+  const [property, user, t, cityOptions, approvedPropertyTypes] = await Promise.all([
     getPropertyForEdit(id),
     getCurrentUser(),
     getTranslations("addProperty"),
+    getCityOptions(),
+    getApprovedDictionaryValues("property_type"),
   ])
 
   if (!property) {
@@ -37,6 +41,8 @@ export default async function EditPropertyPage({ params }: EditPropertyPageProps
         propertyId={property.id}
         initialValues={editablePropertyToFormValues(property)}
         existingImageUrls={property.images}
+        cityOptions={cityOptions}
+        approvedPropertyTypes={approvedPropertyTypes}
       />
     </div>
   )

@@ -23,8 +23,9 @@ export async function isCompanyActiveForUser(
     .eq("id", profile.company_id)
     .maybeSingle()
 
+  // Fail closed on lookup errors — do not admit when status is unknown.
   if (error || !company) {
-    return true
+    return false
   }
 
   return company.is_active

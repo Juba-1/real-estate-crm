@@ -1,7 +1,13 @@
+/**
+ * Request-level memoization for hot auth/profile reads.
+ * Dedupes middleware→layout→page→action waterfalls within one RSC render.
+ */
+import { cache } from "react"
+
 import { createClient } from "@/lib/supabase/server"
 import type { CurrentUserProfile } from "@/types/user"
 
-export async function getCurrentUser(): Promise<CurrentUserProfile | null> {
+async function loadCurrentUser(): Promise<CurrentUserProfile | null> {
   const supabase = await createClient()
   const {
     data: { user },
@@ -36,3 +42,5 @@ export async function getCurrentUser(): Promise<CurrentUserProfile | null> {
     hasProfile: true,
   }
 }
+
+export const getCurrentUser = cache(loadCurrentUser)
